@@ -16,6 +16,7 @@ from database import engine, Base, SessionLocal, get_db
 from models import MotorSensorData
 from migrations import migrate_sensor_columns
 from forecasting import ForecastError, forecast_temperature, train_and_save_model
+from seed_data import DEMO_MOTOR_ID, build_demo_readings
 from tools import get_motor_status, get_temperature_forecast
 
 load_dotenv()
@@ -37,37 +38,57 @@ app.add_middleware(
 client = genai.Client()
 # 已經確認使用最新的輕量化模型
 MODEL_ID = "gemini-3.5-flash-lite"
+SEED_DEMO_DATA = os.getenv("SEED_DEMO_DATA", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 # --- 啟動時自動注入測試資料 (僅供開發測試用) ---
 @app.on_event("startup")
 def populate_test_data():
     db = SessionLocal()
-    if db.query(MotorSensorData).count() == 0:
-        test_records = [
-            MotorSensorData(
-                motor_id="M1",
-                temperature=88.5,
-                humidity=68.0,
-                accel_x=0.12,
-                accel_y=0.08,
-                accel_z=1.03,
-                vibration=1.5,
-                status="warning",
-            ),
-            MotorSensorData(
-                motor_id="M2",
-                temperature=42.0,
-                humidity=51.0,
-                accel_x=0.02,
-                accel_y=0.01,
-                accel_z=0.99,
-                vibration=0.2,
-                status="normal",
-            ),
-        ]
-        db.add_all(test_records)
+    try:
+        if db.query(MotorSensorData).count() == 0:
+            test_records = [
+                MotorSensorData(
+                    motor_id="M1",
+                    temperature=88.5,
+                    humidity=68.0,
+                    accel_x=0.12,
+                    accel_y=0.08,
+                    accel_z=1.03,
+                    vibration=1.5,
+                    status="warning",
+                ),
+                MotorSensorData(
+                    motor_id="M2",
+                    temperature=42.0,
+                    humidity=51.0,
+                    accel_x=0.02,
+                    accel_y=0.01,
+                    accel_z=0.99,
+                    vibration=0.2,
+                    status="normal",
+                ),
+            ]
+            db.add_all(test_records)
+
+        demo_exists = db.query(MotorSensorData.id).filter(
+            MotorSensorData.motor_id == DEMO_MOTOR_ID
+        ).first()
+        if SEED_DEMO_DATA and demo_exists is None:
+            db.add_all(
+                MotorSensorData(**reading)
+                for reading in build_demo_readings()
+            )
         db.commit()
-    db.close()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 # ---------------------------------------------
 
 class ChatRequest(BaseModel):
