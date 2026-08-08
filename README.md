@@ -29,7 +29,9 @@ EdgeMind 是一套以 AI Agent 為核心的工業馬達／邊緣設備診斷系�
 - 使用 Server-Sent Events（SSE）即時顯示 Agent 狀態
 - Gemini Function Calling 自動呼叫設備資料查詢工具
 - 從 PostgreSQL 讀取指定馬達最新的感測紀錄
-- 顯示溫度、震動、設備狀態與記錄時間
+- 顯示溫度、濕度、三軸 XYZ、震動、設備狀態與記錄時間
+- 使用溫度、濕度、三軸 XYZ 預測 30 分鐘後溫度
+- 每台設備獨立訓練並回報時間順序驗證的 MAE／RMSE
 - 產生繁體中文的異常分析與維護建議
 - 支援 Markdown 格式的診斷報告
 - 首次啟動自動建立資料表及範例資料
@@ -508,6 +510,39 @@ data: {"status":"success", ...}
 - 檢查瀏覽器 Console／Network。
 - 檢查 HTTPS mixed content、CORS、代理與防火牆。
 
+### 30 分鐘溫度預測 API
+
+每筆輸入必須同時包含溫度、濕度與三軸加速度：
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/sensor-readings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "motor_id": "M1",
+    "temperature": 43.2,
+    "humidity": 56.8,
+    "accel_x": 0.12,
+    "accel_y": -0.04,
+    "accel_z": 1.01,
+    "recorded_at": "2026-08-09T10:00:00+08:00"
+  }'
+```
+
+累積歷史資料後，訓練每台設備各自的模型：
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/predictions/train/M1
+```
+
+取得最新資料所對應的 30 分鐘後溫度：
+
+```bash
+curl http://127.0.0.1:8000/api/predictions/temperature/M1
+```
+
+也可以在聊天介面輸入「請預測 M1 30 分鐘後的溫度」。首次預測若尚無模型會自動嘗試訓練。訓練至少需要 12 組有效配對；每筆特徵會配對時間戳最接近 30 分鐘後（容許正負 5 分鐘）的實際溫度。API 回應包含時間順序驗證的 MAE 與 RMSE，正式使用前應依設備風險訂定可接受誤差。
+
+
 ## 資料庫與測試資料
 
 後端啟動時會建立 `motor_sensor_data` 資料表。若資料表完全沒有資料，會自動加入 M1、M2 測試紀錄。
@@ -517,6 +552,10 @@ data: {"status":"success", ...}
 | `id` | Integer | 主鍵 |
 | `motor_id` | String | 設備／馬達編號 |
 | `temperature` | Float | 溫度 |
+| `humidity` | Float | 相對濕度（0–100%） |
+| `accel_x` | Float | 三軸感測器 X 軸 |
+| `accel_y` | Float | 三軸感測器 Y 軸 |
+| `accel_z` | Float | 三軸感測器 Z 軸 |
 | `vibration` | Float | 震動 |
 | `status` | String | 設備狀態 |
 | `recorded_at` | DateTime | 紀錄時間 |
