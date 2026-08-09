@@ -19,10 +19,10 @@ EdgeMind 是一套面向工業馬達與邊緣設備的 AI 診斷系統。系統�
 
 本專案已提供可直接使用的 [`docker-compose.yml`](./docker-compose.yml)，可一次啟動前端、後端與 PostgreSQL。
 
-開始前請先安裝：
+開始前請依使用環境選擇一種安裝方式：
 
-- [Docker／Docker Desktop](https://docs.docker.com/get-started/get-docker/)
-- [Docker Compose](https://docs.docker.com/compose/install/)
+- [Docker Desktop](https://docs.docker.com/desktop/)：適合 Windows、macOS 與桌面 Linux，已內含 Docker Engine、Docker CLI 與 Docker Compose。
+- [Docker Engine](https://docs.docker.com/engine/install/)：適合 Linux 或伺服器環境；安裝後請另外安裝 [Docker Compose Plugin](https://docs.docker.com/compose/install/)。
 
 安裝完成後，可用以下指令確認環境：
 
@@ -33,7 +33,7 @@ docker compose version
 
 ## 5 分鐘快速啟動
 
-需求：[Docker](https://docs.docker.com/get-started/get-docker/)、[Docker Compose](https://docs.docker.com/compose/install/)，以及有效的 Gemini API Key。
+需求：[Docker Desktop](https://docs.docker.com/desktop/)，或 [Docker Engine](https://docs.docker.com/engine/install/) 搭配 [Docker Compose Plugin](https://docs.docker.com/compose/install/)，以及有效的 Gemini API Key。
 
 ```bash
 git clone https://github.com/programmerKB/Edge-mind.git
