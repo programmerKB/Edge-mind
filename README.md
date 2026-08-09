@@ -4,7 +4,7 @@ EdgeMind 是一套面向工業馬達與邊緣設備的 AI 診斷系統。系統�
 
 > 從感測資料到可執行決策：數值模型負責預測，AI Agent 負責查詢、解釋與互動。
 
-[快速啟動](#5-分鐘快速啟動) · [預測模型](#預測模型) · [API](#api-參考) · [資料庫](#查看資料庫) · [正式部署](#正式部署基線)
+[Docker 部署](#docker-部署) · [快速啟動](#5-分鐘快速啟動) · [預測模型](#預測模型) · [API](#api-參考) · [資料庫](#查看資料庫) · [正式部署](#正式部署基線)
 
 ## 核心能力
 
@@ -15,9 +15,25 @@ EdgeMind 是一套面向工業馬達與邊緣設備的 AI 診斷系統。系統�
 - 使用 FastAPI、PostgreSQL 與 Docker Compose 快速部署
 - 以預載的 DEMO-1 資料立即體驗完整流程
 
+## Docker 部署
+
+本專案已提供可直接使用的 [`docker-compose.yml`](./docker-compose.yml)，可一次啟動前端、後端與 PostgreSQL。
+
+開始前請先安裝：
+
+- [Docker／Docker Desktop](https://docs.docker.com/get-started/get-docker/)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+
+安裝完成後，可用以下指令確認環境：
+
+```bash
+docker --version
+docker compose version
+```
+
 ## 5 分鐘快速啟動
 
-需求：Docker、Docker Compose，以及有效的 Gemini API Key。
+需求：[Docker](https://docs.docker.com/get-started/get-docker/)、[Docker Compose](https://docs.docker.com/compose/install/)，以及有效的 Gemini API Key。
 
 ```bash
 git clone https://github.com/programmerKB/Edge-mind.git
