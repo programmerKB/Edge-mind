@@ -13,7 +13,7 @@ EdgeMind 是一套面向工業馬達與邊緣設備的 AI 診斷系統。系統�
 - 回報模型驗證 MAE、RMSE 與有效樣本數
 - 透過聊天介面取得異常分析與維護建議
 - 使用 FastAPI、PostgreSQL 與 Docker Compose 快速部署
-- 以預載的 DEMO-1 資料立即體驗完整流程
+- 以 DEMO-1 訓練資料與獨立的 DEMO-2 推論資料體驗完整流程
 
 ## Docker 部署
 
@@ -52,6 +52,11 @@ DATABASE_URL=postgresql://agent_user:請改成高強度密碼@db:5432/motor_moni
 
 # 正式環境可設為 false
 SEED_DEMO_DATA=true
+
+# 推論輸出設定（以下為預設值）
+INFERENCE_OUTPUT_DIR=/app/outputs
+REPORT_TIMEZONE_OFFSET_HOURS=8
+ANOMALY_TEMPERATURE_THRESHOLD=35.0
 ```
 
 `POSTGRES_PASSWORD` 必須與 `DATABASE_URL` 中的密碼一致。真實 API Key 與密碼不可提交到 Git。
@@ -77,7 +82,10 @@ docker compose logs --tail=100 backend
 
 ## 立即驗證預測
 
-後端第一次啟動時會建立 `DEMO-1`，寫入 36 筆、每 5 分鐘一筆的合成歷史資料。重啟不會重複寫入。
+後端第一次啟動時會建立兩個互相分離的合成資料集，重啟不會重複寫入：
+
+- `DEMO-1`：36 筆、每 5 分鐘一筆，專門用來訓練模型。
+- `DEMO-2`：36 筆未見過的新資料，專門用來推論與比對已知的 30 分鐘後真值；展示流程不會用它訓練模型。
 
 訓練模型：
 
@@ -88,16 +96,50 @@ curl -X POST http://127.0.0.1:8000/api/predictions/train/DEMO-1
 預測 30 分鐘後溫度：
 
 ```bash
-curl http://127.0.0.1:8000/api/predictions/temperature/DEMO-1
+curl 'http://127.0.0.1:8000/api/predictions/temperature/DEMO-2?training_motor_id=DEMO-1&auto_train=false'
 ```
 
 或在 Web UI 輸入：
 
 ```text
-請預測 DEMO-1 在 30 分鐘後的溫度，並說明模型誤差
+請使用 DEMO-1 訓練的模型，推論 DEMO-2 在 30 分鐘後的溫度，並說明模型誤差
 ```
 
-`DEMO-1` 僅供功能展示，不代表真實設備表現。正式環境應設定 `SEED_DEMO_DATA=false`。
+`DEMO-1` 與 `DEMO-2` 僅供功能展示，不代表真實設備表現。正式環境應設定 `SEED_DEMO_DATA=false`。
+
+## 推論 CSV 與圖表輸出
+
+每次完成溫度推論，後端會依台北時間建立一個獨立資料夾。來源資料集與每次推論報表分開保存：
+
+```text
+backend/outputs/
+├── datasets/
+│   ├── training/DEMO-1.csv
+│   └── inference/DEMO-2.csv
+├── inference_runs/
+│   └── YYYY-MM-DD/
+│       └── HH-MM-SS-ffffff_DEMO-2/
+│           ├── csv/
+│           │   ├── predictions.csv
+│           │   ├── metrics_summary.csv
+│           │   ├── baseline_comparison.csv
+│           │   ├── anomaly_detection.csv
+│           │   └── system_performance.csv
+│           ├── charts/
+│           │   ├── 01_actual_vs_predicted.svg
+│           │   ├── 02_error_curve.svg
+│           │   ├── 03_error_distribution.svg
+│           │   ├── 04_baseline_mae.svg
+│           │   ├── 05_anomaly_f1.svg
+│           │   ├── 06_error_metrics.svg
+│           │   └── 07_system_performance.svg
+│           └── metadata/run_summary.json
+└── latest_run.txt
+```
+
+CSV 使用帶 BOM 的 UTF-8 編碼，可直接用 Excel 開啟。`predictions.csv` 包含設備編號、訓練資料集、預測產生時間、來源時間、目標時間、預測／實際溫度、絕對誤差與平方誤差。DEMO-2 中已有 30 分鐘後真值的資料會標示為 `歷史回測_已取得真值`；最新即時預測尚未到達目標時間，因此會如實保留空白並標示為 `即時推論_等待真值`。
+
+基準比較包含 Persistence、只使用溫度的 Ridge、五特徵 Ridge，以及靜態溫度門檻。門檻法是異常分類器，不使用 MAE 評估；其 TP、FP、TN、FN、Precision、Recall、F1、False Alarm Rate 與 Lead Time 另存於 `anomaly_detection.csv`。Agent 正確率與回答一致率需要人工標註資料集，目前會明確標記為尚未建立，而不會產生虛構數值。
 
 ## 預測模型
 
@@ -132,7 +174,7 @@ Ridge Regression 會對過大的權重加入 L2 懲罰，在特徵彼此相關�
 4. 標準化五項特徵並訓練 Ridge Regression。
 5. 使用時間序列尾端資料計算 MAE 與 RMSE。
 6. 使用全部有效資料重新訓練並保存模型。
-7. 以最新一筆完整感測資料產生預測。
+7. 以指定推論設備最新一筆完整感測資料產生預測；模型來源可透過 `training_motor_id` 獨立指定。
 
 Ridge Regression 適合此專案的邊緣情境：模型小、訓練與推論快速、結果可解釋，也不需要額外的大型 ML 套件。若設備關係高度非線性或資料量大幅增加，可再比較 Random Forest、Gradient Boosting 或序列模型。
 
@@ -177,7 +219,7 @@ Gemini 負責理解問題、選擇工具與整理回答；數值預測由後端 
 | POST | `/api/chat_utf8` | Agent SSE 聊天 |
 | POST | `/api/sensor-readings` | 寫入一筆完整感測資料 |
 | POST | `/api/predictions/train/{motor_id}` | 訓練並保存設備模型 |
-| GET | `/api/predictions/temperature/{motor_id}` | 預測 30 分鐘後溫度 |
+| GET | `/api/predictions/temperature/{motor_id}` | 以該設備資料預測 30 分鐘後溫度，可用 `training_motor_id` 指定模型來源 |
 
 ### 寫入感測資料
 
@@ -216,6 +258,13 @@ curl -X POST http://127.0.0.1:8000/api/predictions/train/M1
 curl http://127.0.0.1:8000/api/predictions/temperature/M1
 ```
 
+若訓練與推論資料來自不同設備，路徑中的 `motor_id` 是推論資料來源，查詢參數 `training_motor_id` 是已訓練模型來源：
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/predictions/train/DEMO-1
+curl 'http://127.0.0.1:8000/api/predictions/temperature/DEMO-2?training_motor_id=DEMO-1&auto_train=false'
+```
+
 完整 request/response schema 請查看 <http://localhost:8000/docs>。
 
 ## 查看資料庫
@@ -241,7 +290,7 @@ GROUP BY motor_id
 ORDER BY motor_id;
 ```
 
-查看 DEMO-1 最新資料：
+查看 DEMO-1 訓練資料與 DEMO-2 推論資料：
 
 ```sql
 SELECT
@@ -252,7 +301,7 @@ SELECT
     accel_z,
     recorded_at
 FROM motor_sensor_data
-WHERE motor_id = 'DEMO-1'
+WHERE motor_id IN ('DEMO-1', 'DEMO-2')
 ORDER BY recorded_at DESC
 LIMIT 10;
 ```
@@ -274,7 +323,8 @@ ORDER BY trained_at DESC;
 ├── backend/
 │   ├── main.py             # FastAPI、SSE、資料寫入與預測 API
 │   ├── forecasting.py      # 特徵配對、訓練、驗證與推論
-│   ├── seed_data.py        # DEMO-1 合成歷史資料
+│   ├── reporting.py        # 每次推論的 CSV、SVG 圖表與效能報表
+│   ├── seed_data.py        # DEMO-1 訓練與 DEMO-2 推論資料
 │   ├── models.py           # 感測資料與模型資料表
 │   ├── migrations.py       # 舊資料庫欄位升級
 │   ├── tools.py            # Gemini 可呼叫的診斷／預測工具
@@ -400,7 +450,7 @@ docker compose logs --tail=100 db
 - 新感測資料不會自動觸發重新訓練；請依資料量或時間週期呼叫訓練 API。
 - 驗證指標來自單次時間切分，不等同跨季節、跨負載條件的完整驗證。
 - 目前沒有使用者登入、細粒度授權、rate limit 與完整稽核機制。
-- `DEMO-1` 是合成資料，只能用來確認流程是否運作。
+- `DEMO-1` 與 `DEMO-2` 是合成資料，只能用來確認流程是否運作。
 
 ## 正式部署基線
 

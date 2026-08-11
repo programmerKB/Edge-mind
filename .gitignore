@@ -25,3 +25,6 @@ Thumbs.db
 # Logs and backups
 *.log
 *.sql
+
+# Generated inference datasets, CSV reports, charts, and run metadata
+backend/outputs/

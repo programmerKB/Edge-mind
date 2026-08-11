@@ -137,6 +137,59 @@ class ForecastingTests(unittest.TestCase):
         finally:
             session.close()
 
+    @unittest.skipUnless(HAS_SQLALCHEMY, "SQLAlchemy is not installed")
+    def test_uses_training_device_model_for_another_inference_device(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        session = sessionmaker(bind=engine)()
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        try:
+            for index in range(30):
+                session.add(
+                    MotorSensorData(
+                        motor_id="DEMO-1",
+                        temperature=30 + index * 0.1,
+                        humidity=55 + index % 4,
+                        accel_x=math.sin(index) * 0.1,
+                        accel_y=math.cos(index) * 0.1,
+                        accel_z=1 + index * 0.001,
+                        vibration=1,
+                        status="training",
+                        recorded_at=start + timedelta(minutes=5 * index),
+                    )
+                )
+            session.add(
+                MotorSensorData(
+                    motor_id="DEMO-2",
+                    temperature=32.5,
+                    humidity=56,
+                    accel_x=0.03,
+                    accel_y=-0.02,
+                    accel_z=1.01,
+                    vibration=1,
+                    status="inference",
+                    recorded_at=start + timedelta(hours=3),
+                )
+            )
+            session.commit()
+
+            train_and_save_model(session, "DEMO-1")
+            result = forecast_temperature(
+                session,
+                "DEMO-2",
+                auto_train=False,
+                training_motor_id="DEMO-1",
+            )
+
+            self.assertEqual(result["motor_id"], "DEMO-2")
+            self.assertEqual(result["inference_motor_id"], "DEMO-2")
+            self.assertEqual(result["training_motor_id"], "DEMO-1")
+            self.assertEqual(result["model"]["training_motor_id"], "DEMO-1")
+            self.assertEqual(result["features"]["temperature"], 32.5)
+            self.assertTrue(math.isfinite(result["predicted_temperature"]))
+        finally:
+            session.close()
+
 
 if __name__ == "__main__":
     unittest.main()

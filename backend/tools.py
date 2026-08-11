@@ -38,18 +38,27 @@ def get_motor_status(motor_id: str) -> str:
         db.close()
 
 
-def get_temperature_forecast(motor_id: str) -> str:
+def get_temperature_forecast(
+    motor_id: str,
+    training_motor_id: str | None = None,
+) -> str:
     """預測指定馬達/設備 30 分鐘後的溫度。
 
     使用最新的溫度、濕度與三軸加速度 XYZ，並回傳模型驗證誤差。
 
     Args:
-        motor_id: 馬達編號，例如 'M1', 'M2', 'STM32-Node-1'
+        motor_id: 推論資料的馬達編號，例如 'DEMO-2'、'M1'
+        training_motor_id: 訓練模型的資料來源；未提供時使用 motor_id
     """
     db = SessionLocal()
     try:
         return json.dumps(
-            forecast_temperature(db, motor_id, auto_train=True),
+            forecast_temperature(
+                db,
+                motor_id,
+                auto_train=True,
+                training_motor_id=training_motor_id,
+            ),
             ensure_ascii=False,
         )
     except ForecastError as error:

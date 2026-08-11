@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import math
+import time
 from datetime import datetime
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -16,7 +17,14 @@ from database import engine, Base, SessionLocal, get_db
 from models import MotorSensorData
 from migrations import migrate_sensor_columns
 from forecasting import ForecastError, forecast_temperature, train_and_save_model
-from seed_data import DEMO_MOTOR_ID, build_demo_readings
+from seed_data import (
+    DEMO_INFERENCE_MOTOR_ID,
+    DEMO_INFERENCE_READING_COUNT,
+    DEMO_TRAINING_MOTOR_ID,
+    build_demo_inference_readings,
+    build_demo_readings,
+)
+from reporting import export_demo_datasets, update_api_duration
 from tools import get_motor_status, get_temperature_forecast
 
 load_dotenv()
@@ -75,15 +83,35 @@ def populate_test_data():
             ]
             db.add_all(test_records)
 
-        demo_exists = db.query(MotorSensorData.id).filter(
-            MotorSensorData.motor_id == DEMO_MOTOR_ID
-        ).first()
-        if SEED_DEMO_DATA and demo_exists is None:
-            db.add_all(
-                MotorSensorData(**reading)
-                for reading in build_demo_readings()
+        if SEED_DEMO_DATA:
+            demo_datasets = (
+                (DEMO_TRAINING_MOTOR_ID, build_demo_readings),
+                (DEMO_INFERENCE_MOTOR_ID, build_demo_inference_readings),
             )
+            for demo_motor_id, build_readings in demo_datasets:
+                demo_query = db.query(MotorSensorData).filter(
+                    MotorSensorData.motor_id == demo_motor_id
+                )
+                demo_exists = demo_query.first()
+                if (
+                    demo_motor_id == DEMO_INFERENCE_MOTOR_ID
+                    and demo_query.filter(
+                        MotorSensorData.status == "demo-inference"
+                    ).count()
+                    != DEMO_INFERENCE_READING_COUNT
+                ):
+                    demo_query.filter(
+                        MotorSensorData.status == "demo-inference"
+                    ).delete(synchronize_session=False)
+                    demo_exists = None
+                if demo_exists is None:
+                    db.add_all(
+                        MotorSensorData(**reading)
+                        for reading in build_readings()
+                    )
         db.commit()
+        if SEED_DEMO_DATA:
+            export_demo_datasets(db)
     except Exception:
         db.rollback()
         raise
@@ -183,6 +211,7 @@ def train_temperature_forecast(
             "validation_sample_count": payload["validation_sample_count"],
             "validation_mae": round(payload["mae"], 4),
             "validation_rmse": round(payload["rmse"], 4),
+            "training_duration_ms": round(payload["training_duration_ms"], 6),
             "trained_at": payload["trained_at"],
         }
     except ForecastError as error:
@@ -203,11 +232,25 @@ def train_temperature_forecast(
 def get_30_minute_temperature_forecast(
     motor_id: str,
     auto_train: bool = True,
+    training_motor_id: str | None = None,
     db=Depends(get_db),
 ):
-    """Predict temperature 30 minutes after the latest complete reading."""
+    """Predict from motor_id data using its own or another device's model."""
+    request_started = time.perf_counter()
     try:
-        return forecast_temperature(db, motor_id, auto_train=auto_train)
+        result = forecast_temperature(
+            db,
+            motor_id,
+            auto_train=auto_train,
+            training_motor_id=training_motor_id,
+        )
+        api_duration_ms = (time.perf_counter() - request_started) * 1000
+        update_api_duration(
+            result["artifacts"]["system_csv"],
+            api_duration_ms,
+        )
+        result["api_handler_duration_ms"] = round(api_duration_ms, 6)
+        return result
     except ForecastError as error:
         db.rollback()
         raise HTTPException(
@@ -230,7 +273,7 @@ async def chat_with_agent(request: ChatRequest):
         await asyncio.sleep(0.5)
 
         config = types.GenerateContentConfig(
-            system_instruction="你是一個專業的工業馬達與邊緣設備診斷助手。請根據數據回答問題，查詢狀態時呼叫狀態工具，詢問未來溫度時務必呼叫 30 分鐘預測工具。回答請使用繁體中文，並給出具體的維護建議。",
+            system_instruction="你是一個專業的工業馬達與邊緣設備診斷助手。請根據數據回答問題，查詢狀態時呼叫狀態工具，詢問未來溫度時務必呼叫 30 分鐘預測工具。若使用者要求用 A 設備訓練的模型推論 B 設備，請傳入 motor_id=B、training_motor_id=A。回答請使用繁體中文，並給出具體的維護建議。",
             tools=[get_motor_status, get_temperature_forecast],
             temperature=0.2
         )
@@ -260,7 +303,11 @@ async def chat_with_agent(request: ChatRequest):
                     tool_result_str = get_motor_status(motor_id=motor_id)
                 elif func_name == "get_temperature_forecast":
                     motor_id = func_args.get("motor_id", "")
-                    tool_result_str = get_temperature_forecast(motor_id=motor_id)
+                    training_motor_id = func_args.get("training_motor_id")
+                    tool_result_str = get_temperature_forecast(
+                        motor_id=motor_id,
+                        training_motor_id=training_motor_id,
+                    )
                 else:
                     tool_result_str = json.dumps({"error": "未知的工具"})
                 
@@ -300,7 +347,7 @@ async def chat_with_agent_utf8(request: ChatRequest):
         await asyncio.sleep(0.5)
 
         config = types.GenerateContentConfig(
-            system_instruction="你是一個專業的工業馬達與邊緣設備診斷助手。請根據數據回答問題，查詢狀態時呼叫狀態工具，詢問未來溫度時務必呼叫 30 分鐘預測工具。回答請使用繁體中文，並給出具體的維護建議。",
+            system_instruction="你是一個專業的工業馬達與邊緣設備診斷助手。請根據數據回答問題，查詢狀態時呼叫狀態工具，詢問未來溫度時務必呼叫 30 分鐘預測工具。若使用者要求用 A 設備訓練的模型推論 B 設備，請傳入 motor_id=B、training_motor_id=A。回答請使用繁體中文，並給出具體的維護建議。",
             tools=[get_motor_status, get_temperature_forecast],
             temperature=0.2
         )
@@ -330,7 +377,11 @@ async def chat_with_agent_utf8(request: ChatRequest):
                     tool_result_str = get_motor_status(motor_id=motor_id)
                 elif func_name == "get_temperature_forecast":
                     motor_id = func_args.get("motor_id", "")
-                    tool_result_str = get_temperature_forecast(motor_id=motor_id)
+                    training_motor_id = func_args.get("training_motor_id")
+                    tool_result_str = get_temperature_forecast(
+                        motor_id=motor_id,
+                        training_motor_id=training_motor_id,
+                    )
                 else:
                     tool_result_str = json.dumps({"error": "未知的工具"})
                 

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
 import math
+import time
 from typing import Any, Iterable, Sequence, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -210,6 +211,7 @@ def predict_with_payload(
 def train_temperature_model(
     examples: Sequence[TrainingExample],
 ) -> dict:
+    training_started = time.perf_counter()
     if len(examples) < MIN_TRAINING_SAMPLES:
         raise ForecastError(
             f"有效的 30 分鐘訓練樣本只有 {len(examples)} 筆，"
@@ -247,6 +249,10 @@ def train_temperature_model(
             "validation_sample_count": len(validation),
             "mae": mae,
             "rmse": rmse,
+            "training_duration_ms": (
+                time.perf_counter() - training_started
+            )
+            * 1000,
             "trained_at": datetime.now(timezone.utc).isoformat(),
         }
     )
@@ -288,21 +294,26 @@ def forecast_temperature(
     db,
     motor_id: str,
     auto_train: bool = True,
+    training_motor_id: str | None = None,
 ) -> dict:
     from models import MotorSensorData, TemperatureForecastModel
+    from reporting import create_inference_report
 
+    inference_started = time.perf_counter()
+    cpu_started = time.process_time()
+    model_motor_id = training_motor_id or motor_id
     stored = (
         db.query(TemperatureForecastModel)
-        .filter(TemperatureForecastModel.motor_id == motor_id)
+        .filter(TemperatureForecastModel.motor_id == model_motor_id)
         .first()
     )
     if stored is None:
         if not auto_train:
-            raise ForecastError(f"設備 {motor_id} 尚未訓練預測模型")
-        train_and_save_model(db, motor_id)
+            raise ForecastError(f"設備 {model_motor_id} 尚未訓練預測模型")
+        train_and_save_model(db, model_motor_id)
         stored = (
             db.query(TemperatureForecastModel)
-            .filter(TemperatureForecastModel.motor_id == motor_id)
+            .filter(TemperatureForecastModel.motor_id == model_motor_id)
             .first()
         )
 
@@ -322,12 +333,18 @@ def forecast_temperature(
 
     payload = json.loads(stored.model_json)
     prediction = predict_with_payload(payload, features)
+    model_inference_duration_ms = (
+        time.perf_counter() - inference_started
+    ) * 1000
+    process_cpu_time_ms = (time.process_time() - cpu_started) * 1000
     source_time = latest.recorded_at
     target_time = source_time + timedelta(
         minutes=FORECAST_HORIZON_MINUTES
     )
-    return {
+    result = {
         "motor_id": motor_id,
+        "inference_motor_id": motor_id,
+        "training_motor_id": model_motor_id,
         "predicted_temperature": round(prediction, 3),
         "unit": "°C",
         "forecast_horizon_minutes": FORECAST_HORIZON_MINUTES,
@@ -335,10 +352,63 @@ def forecast_temperature(
         "target_time": target_time.isoformat(),
         "features": dict(zip(FEATURE_NAMES, features)),
         "model": {
+            "training_motor_id": model_motor_id,
             "algorithm": payload["algorithm"],
             "sample_count": payload["sample_count"],
             "validation_mae": round(payload["mae"], 4),
             "validation_rmse": round(payload["rmse"], 4),
+            "training_duration_ms": (
+                round(payload["training_duration_ms"], 6)
+                if payload.get("training_duration_ms") is not None
+                else None
+            ),
             "trained_at": payload["trained_at"],
         },
     }
+    training_records = (
+        db.query(MotorSensorData)
+        .filter(MotorSensorData.motor_id == model_motor_id)
+        .order_by(MotorSensorData.recorded_at.asc())
+        .all()
+    )
+    inference_records = (
+        db.query(MotorSensorData)
+        .filter(MotorSensorData.motor_id == motor_id)
+        .order_by(MotorSensorData.recorded_at.asc())
+        .all()
+    )
+    report = create_inference_report(
+        training_records=training_records,
+        inference_records=inference_records,
+        model_payload=payload,
+        inference_motor_id=motor_id,
+        training_motor_id=model_motor_id,
+        latest_prediction=prediction,
+        generated_at=datetime.now(timezone.utc),
+        model_inference_duration_ms=model_inference_duration_ms,
+        process_cpu_time_ms=process_cpu_time_ms,
+    )
+    evaluation_metrics = report["metrics"]
+    result["evaluation"] = {
+        "completed_samples": report["completed_evaluation_samples"],
+        "mae": (
+            round(evaluation_metrics["mae"], 6)
+            if evaluation_metrics["mae"] is not None
+            else None
+        ),
+        "rmse": (
+            round(evaluation_metrics["rmse"], 6)
+            if evaluation_metrics["rmse"] is not None
+            else None
+        ),
+        "max_error": (
+            round(evaluation_metrics["max_error"], 6)
+            if evaluation_metrics["max_error"] is not None
+            else None
+        ),
+    }
+    result["artifacts"] = {
+        "run_directory": report["run_directory"],
+        **report["files"],
+    }
+    return result
