@@ -14,6 +14,12 @@ import resource
 import time
 from typing import Any, Iterable, Sequence
 
+from evaluation import (
+    binary_score_metrics,
+    classification_metrics,
+    regression_metrics,
+)
+
 
 REPORT_ROOT = Path(
     os.getenv(
@@ -132,45 +138,6 @@ def _temperature_only_model(examples: Sequence[Any], ridge_alpha: float) -> dict
 def _predict_temperature_only(payload: dict, temperature: float) -> float:
     normalized = (temperature - payload["mean"]) / payload["scale"]
     return payload["intercept"] + payload["weight"] * normalized
-
-
-def _regression_metrics(predictions: Sequence[float], actuals: Sequence[float]) -> dict:
-    if not predictions:
-        return {"sample_count": 0, "mae": None, "rmse": None, "max_error": None}
-    errors = [prediction - actual for prediction, actual in zip(predictions, actuals)]
-    absolute = [abs(error) for error in errors]
-    return {
-        "sample_count": len(errors),
-        "mae": sum(absolute) / len(absolute),
-        "rmse": math.sqrt(sum(error * error for error in errors) / len(errors)),
-        "max_error": max(absolute),
-    }
-
-
-def _classification_metrics(
-    predicted: Sequence[bool],
-    actual: Sequence[bool],
-    lead_minutes: int,
-) -> dict:
-    tp = sum(prediction and truth for prediction, truth in zip(predicted, actual))
-    fp = sum(prediction and not truth for prediction, truth in zip(predicted, actual))
-    tn = sum(not prediction and not truth for prediction, truth in zip(predicted, actual))
-    fn = sum(not prediction and truth for prediction, truth in zip(predicted, actual))
-    precision = tp / (tp + fp) if tp + fp else 0.0
-    recall = tp / (tp + fn) if tp + fn else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    false_alarm_rate = fp / (fp + tn) if fp + tn else 0.0
-    return {
-        "TP": tp,
-        "FP": fp,
-        "TN": tn,
-        "FN": fn,
-        "precision": precision,
-        "recall": recall,
-        "f1_score": f1,
-        "false_alarm_rate": false_alarm_rate,
-        "lead_time_minutes": lead_minutes if tp else 0,
-    }
 
 
 def _svg_shell(title: str, body: str, width: int = 1000, height: int = 600) -> str:
@@ -406,7 +373,7 @@ def create_inference_report(
         "Five-feature Ridge": five_feature_predictions,
     }
     regression = {
-        name: _regression_metrics(predictions, actuals)
+        name: regression_metrics(predictions, actuals)
         for name, predictions in methods.items()
     }
     main_metrics = regression["Five-feature Ridge"]
@@ -416,8 +383,13 @@ def create_inference_report(
             "訓練資料集": training_motor_id,
             "完成真值樣本數": main_metrics["sample_count"],
             "MAE_C": _rounded(main_metrics["mae"]),
+            "中位數絕對誤差_C": _rounded(main_metrics["median_absolute_error"]),
+            "MSE_C2": _rounded(main_metrics["mse"]),
             "RMSE_C": _rounded(main_metrics["rmse"]),
             "最大絕對誤差_C": _rounded(main_metrics["max_error"]),
+            "R2": _rounded(main_metrics["r2_score"]),
+            "MAPE_percent": _rounded(main_metrics["mape_percent"]),
+            "平均誤差_bias_C": _rounded(main_metrics["mean_error"]),
             "異常溫度門檻_C": ANOMALY_TEMPERATURE_THRESHOLD,
         }
     ]
@@ -438,8 +410,12 @@ def create_inference_report(
                 "用途": "30分鐘溫度預測",
                 "樣本數": metrics["sample_count"],
                 "MAE_C": _rounded(metrics["mae"]),
+                "中位數絕對誤差_C": _rounded(metrics["median_absolute_error"]),
+                "MSE_C2": _rounded(metrics["mse"]),
                 "RMSE_C": _rounded(metrics["rmse"]),
                 "最大絕對誤差_C": _rounded(metrics["max_error"]),
+                "R2": _rounded(metrics["r2_score"]),
+                "MAPE_percent": _rounded(metrics["mape_percent"]),
                 "相對Persistence改善率_percent": _rounded(improvement),
                 "備註": "",
             }
@@ -450,8 +426,12 @@ def create_inference_report(
             "用途": "傳統異常監控",
             "樣本數": len(actuals),
             "MAE_C": "",
+            "中位數絕對誤差_C": "",
+            "MSE_C2": "",
             "RMSE_C": "",
             "最大絕對誤差_C": "",
+            "R2": "",
+            "MAPE_percent": "",
             "相對Persistence改善率_percent": "",
             "備註": "門檻法為分類器，不以回歸誤差評估",
         }
@@ -462,31 +442,30 @@ def create_inference_report(
     actual_anomalies = [
         actual >= ANOMALY_TEMPERATURE_THRESHOLD for actual in actuals
     ]
-    anomaly_methods = {
-        **{
-            name: [
-                value >= ANOMALY_TEMPERATURE_THRESHOLD for value in predictions
-            ]
-            for name, predictions in methods.items()
-        },
+    anomaly_score_methods = {
+        **methods,
         "Static temperature threshold": [
-            example.features[0] >= ANOMALY_TEMPERATURE_THRESHOLD
-            for example in evaluation_examples
+            float(example.features[0]) for example in evaluation_examples
         ],
     }
     anomaly_rows = []
-    for name, predicted_anomalies in anomaly_methods.items():
-        metrics = _classification_metrics(
+    for name, scores in anomaly_score_methods.items():
+        predicted_anomalies = [
+            value >= ANOMALY_TEMPERATURE_THRESHOLD for value in scores
+        ]
+        metrics = classification_metrics(
             predicted_anomalies,
             actual_anomalies,
             FORECAST_HORIZON_MINUTES,
         )
+        score_metrics = binary_score_metrics(scores, actual_anomalies)
         anomaly_rows.append(
             {
                 "方法": name,
                 "異常定義": f"30分鐘後溫度 >= {ANOMALY_TEMPERATURE_THRESHOLD} C",
                 "真值來源": "目標時間實際溫度；不使用人工輸入的status欄位",
                 **metrics,
+                **score_metrics,
             }
         )
     anomaly_csv = csv_directory / "anomaly_detection.csv"
@@ -637,6 +616,15 @@ def create_inference_report(
         "latest_actual_status": "pending",
         "completed_evaluation_samples": len(actuals),
         "metrics": main_metrics,
+        "regression_baselines": regression,
+        "anomaly_classification": {
+            row["方法"]: {
+                key: value
+                for key, value in row.items()
+                if key not in {"方法", "異常定義", "真值來源"}
+            }
+            for row in anomaly_rows
+        },
         "anomaly_temperature_threshold_c": ANOMALY_TEMPERATURE_THRESHOLD,
         "files": {
             "predictions_csv": str(predictions_csv),
@@ -667,8 +655,10 @@ def create_inference_report(
     return summary
 
 
-def update_api_duration(system_csv_path: str, duration_ms: float) -> None:
-    """Fill in handler timing after report creation without changing its schema."""
+def update_api_duration(system_csv_path: str, duration_ms: float) -> dict:
+    """Finalize one run and update statistics aggregated across all runs."""
+    from performance import record_performance_run
+
     path = Path(system_csv_path)
     with path.open("r", encoding="utf-8-sig", newline="") as source:
         reader = csv.DictReader(source)
@@ -697,3 +687,15 @@ def update_api_duration(system_csv_path: str, duration_ms: float) -> None:
             json.dumps(summary, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+    aggregate = record_performance_run(system_csv_path)
+    if summary_path.is_file():
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary["performance_aggregate"] = {
+            "run_count": aggregate["run_count"],
+            "files": aggregate["files"],
+        }
+        summary_path.write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    return aggregate

@@ -16,6 +16,8 @@ import math
 import time
 from typing import Any, Iterable, Sequence, TYPE_CHECKING
 
+from evaluation import regression_metrics
+
 if TYPE_CHECKING:
     from models import MotorSensorData
 
@@ -226,29 +228,29 @@ def train_temperature_model(
     training = ordered[:-validation_size]
     validation = ordered[-validation_size:]
     validation_model = _fit_parameters(training)
-    residuals = [
+    validation_predictions = [
         predict_with_payload(validation_model, example.features)
-        - example.target_temperature
         for example in validation
     ]
-    mae = sum(abs(value) for value in residuals) / len(residuals)
-    rmse = math.sqrt(
-        sum(value * value for value in residuals) / len(residuals)
+    validation_metrics = regression_metrics(
+        validation_predictions,
+        [example.target_temperature for example in validation],
     )
 
     # Refit on all available history after the time-ordered evaluation.
     payload = _fit_parameters(ordered)
     payload.update(
         {
-            "version": 1,
+            "version": 2,
             "algorithm": "ridge_regression",
             "feature_names": list(FEATURE_NAMES),
             "horizon_minutes": FORECAST_HORIZON_MINUTES,
             "target_tolerance_minutes": TARGET_TOLERANCE_MINUTES,
             "sample_count": len(ordered),
             "validation_sample_count": len(validation),
-            "mae": mae,
-            "rmse": rmse,
+            "mae": validation_metrics["mae"],
+            "rmse": validation_metrics["rmse"],
+            "validation_metrics": validation_metrics,
             "training_duration_ms": (
                 time.perf_counter() - training_started
             )
@@ -299,7 +301,6 @@ def forecast_temperature(
     from models import MotorSensorData, TemperatureForecastModel
     from reporting import create_inference_report
 
-    inference_started = time.perf_counter()
     cpu_started = time.process_time()
     model_motor_id = training_motor_id or motor_id
     stored = (
@@ -332,9 +333,10 @@ def forecast_temperature(
         )
 
     payload = json.loads(stored.model_json)
+    model_inference_started = time.perf_counter()
     prediction = predict_with_payload(payload, features)
     model_inference_duration_ms = (
-        time.perf_counter() - inference_started
+        time.perf_counter() - model_inference_started
     ) * 1000
     process_cpu_time_ms = (time.process_time() - cpu_started) * 1000
     source_time = latest.recorded_at
@@ -357,6 +359,21 @@ def forecast_temperature(
             "sample_count": payload["sample_count"],
             "validation_mae": round(payload["mae"], 4),
             "validation_rmse": round(payload["rmse"], 4),
+            "validation_r2": (
+                round(payload.get("validation_metrics", {}).get("r2_score"), 4)
+                if payload.get("validation_metrics", {}).get("r2_score")
+                is not None
+                else None
+            ),
+            "validation_mape_percent": (
+                round(
+                    payload.get("validation_metrics", {}).get("mape_percent"),
+                    4,
+                )
+                if payload.get("validation_metrics", {}).get("mape_percent")
+                is not None
+                else None
+            ),
             "training_duration_ms": (
                 round(payload["training_duration_ms"], 6)
                 if payload.get("training_duration_ms") is not None
@@ -391,22 +408,16 @@ def forecast_temperature(
     evaluation_metrics = report["metrics"]
     result["evaluation"] = {
         "completed_samples": report["completed_evaluation_samples"],
-        "mae": (
-            round(evaluation_metrics["mae"], 6)
-            if evaluation_metrics["mae"] is not None
-            else None
-        ),
-        "rmse": (
-            round(evaluation_metrics["rmse"], 6)
-            if evaluation_metrics["rmse"] is not None
-            else None
-        ),
-        "max_error": (
-            round(evaluation_metrics["max_error"], 6)
-            if evaluation_metrics["max_error"] is not None
-            else None
-        ),
+        **{
+            name: round(value, 6) if value is not None else None
+            for name, value in evaluation_metrics.items()
+            if name != "sample_count"
+        },
     }
+    result["anomaly_evaluation"] = report["anomaly_classification"].get(
+        "Five-feature Ridge",
+        {},
+    )
     result["artifacts"] = {
         "run_directory": report["run_directory"],
         **report["files"],

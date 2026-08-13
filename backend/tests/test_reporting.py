@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import json
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
@@ -57,6 +58,60 @@ class ReportingTests(unittest.TestCase):
                 self.assertEqual(len(files["charts"]), 7)
                 self.assertTrue(
                     all(Path(chart).is_file() for chart in files["charts"])
+                )
+                self.assertIn("r2_score", report["metrics"])
+                self.assertIn(
+                    "specificity",
+                    report["anomaly_classification"]["Five-feature Ridge"],
+                )
+                self.assertIn(
+                    "roc_auc",
+                    report["anomaly_classification"]["Five-feature Ridge"],
+                )
+
+                aggregate = reporting.update_api_duration(
+                    files["system_csv"],
+                    12.5,
+                )
+                self.assertEqual(aggregate["run_count"], 1)
+                self.assertTrue(Path(aggregate["files"]["history_csv"]).is_file())
+                self.assertTrue(Path(aggregate["files"]["summary_csv"]).is_file())
+                summary = json.loads(
+                    Path(aggregate["files"]["summary_json"]).read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertEqual(
+                    summary["metrics"]["api_handler_duration_ms"]["median"],
+                    12.5,
+                )
+
+                # Finalizing the same run is idempotent and does not inflate N.
+                repeated = reporting.update_api_duration(
+                    files["system_csv"],
+                    14.0,
+                )
+                self.assertEqual(repeated["run_count"], 1)
+
+                second_report = reporting.create_inference_report(
+                    training_records=training,
+                    inference_records=inference,
+                    model_payload=payload,
+                    inference_motor_id="DEMO-2",
+                    training_motor_id="DEMO-1",
+                    latest_prediction=latest_prediction,
+                    generated_at=reference_time + timedelta(seconds=1),
+                    model_inference_duration_ms=0.2,
+                    process_cpu_time_ms=0.2,
+                )
+                combined = reporting.update_api_duration(
+                    second_report["files"]["system_csv"],
+                    26.0,
+                )
+                self.assertEqual(combined["run_count"], 2)
+                self.assertEqual(
+                    combined["metrics"]["api_handler_duration_ms"]["median"],
+                    20.0,
                 )
         finally:
             reporting.REPORT_ROOT = original_root
