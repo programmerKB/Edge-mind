@@ -87,6 +87,8 @@ class ForecastingTests(unittest.TestCase):
 
         self.assertEqual(payload["feature_names"], list(FEATURE_NAMES))
         self.assertLess(payload["mae"], 0.05)
+        self.assertIn("r2_score", payload["validation_metrics"])
+        self.assertIn("mape_percent", payload["validation_metrics"])
         self.assertAlmostEqual(
             prediction,
             examples[-1].target_temperature,

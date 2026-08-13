@@ -10,7 +10,9 @@ EdgeMind 是一套面向工業馬達與邊緣設備的 AI 診斷系統。系統�
 
 - 查詢設備最新的溫度、濕度、XYZ 三軸與震動狀態
 - 使用五項感測特徵預測 30 分鐘後溫度
-- 回報模型驗證 MAE、RMSE 與有效樣本數
+- 回報回歸模型的 MAE、MSE、RMSE、R²、MAPE 與誤差中位數
+- 回報異常分類的混淆矩陣、Precision、Recall、Specificity、F1、ROC-AUC 與 PR-AUC
+- 彙整多次推論的平均值、中位數、標準差與 P90／P95／P99 效能
 - 透過聊天介面取得異常分析與維護建議
 - 使用 FastAPI、PostgreSQL 與 Docker Compose 快速部署
 - 以 DEMO-1 訓練資料與獨立的 DEMO-2 推論資料體驗完整流程
@@ -134,12 +136,18 @@ backend/outputs/
 │           │   ├── 06_error_metrics.svg
 │           │   └── 07_system_performance.svg
 │           └── metadata/run_summary.json
+├── performance/
+│   ├── performance_history.csv
+│   ├── performance_summary.csv
+│   └── performance_summary.json
 └── latest_run.txt
 ```
 
 CSV 使用帶 BOM 的 UTF-8 編碼，可直接用 Excel 開啟。`predictions.csv` 包含設備編號、訓練資料集、預測產生時間、來源時間、目標時間、預測／實際溫度、絕對誤差與平方誤差。DEMO-2 中已有 30 分鐘後真值的資料會標示為 `歷史回測_已取得真值`；最新即時預測尚未到達目標時間，因此會如實保留空白並標示為 `即時推論_等待真值`。
 
-基準比較包含 Persistence、只使用溫度的 Ridge、五特徵 Ridge，以及靜態溫度門檻。門檻法是異常分類器，不使用 MAE 評估；其 TP、FP、TN、FN、Precision、Recall、F1、False Alarm Rate 與 Lead Time 另存於 `anomaly_detection.csv`。Agent 正確率與回答一致率需要人工標註資料集，目前會明確標記為尚未建立，而不會產生虛構數值。
+基準比較包含 Persistence、只使用溫度的 Ridge、五特徵 Ridge，以及靜態溫度門檻。門檻法是異常分類器，不使用 MAE 評估；其 TP、FP、TN、FN、Accuracy、Precision、Recall、Specificity、F1、ROC-AUC、PR-AUC、False Alarm Rate 與 Lead Time 另存於 `anomaly_detection.csv`。Agent 正確率與回答一致率需要人工標註資料集，目前會明確標記為尚未建立，而不會產生虛構數值。
+
+每次 API 或 Agent 工具完成推論後，系統會將該次時間與資源量測寫入 `performance_history.csv`，再以所有已完成執行重新計算平均值、中位數、標準差、最小值、最大值及 P90／P95／P99。相同執行重複完成寫入時採更新而非新增，避免樣本數膨脹。彙整結果也可由 `GET /api/performance/summary` 取得。
 
 ## 預測模型
 
@@ -155,7 +163,8 @@ EdgeMind 為每台設備分別訓練模型，避免不同機台的負載、環�
 | 最少資料 | 12 組有效的「當下 → 30 分鐘後」配對 |
 | 時間容許 | 尋找 30 分鐘後最近的紀錄，容許 ±5 分鐘 |
 | 驗證方式 | 依時間排序，前段訓練、最後 20% 驗證 |
-| 評估指標 | MAE、RMSE |
+| 回歸評估指標 | MAE、誤差中位數、MSE、RMSE、R²、MAPE、平均誤差與最大誤差 |
+| 異常分類指標 | Confusion Matrix、Accuracy、Precision、Recall、Specificity、F1、ROC-AUC、PR-AUC |
 | 模型保存 | JSON 形式保存於 PostgreSQL |
 
 模型先將各特徵標準化，再估計：
@@ -172,7 +181,7 @@ Ridge Regression 會對過大的權重加入 L2 懲罰，在特徵彼此相關�
 2. 以當下五項感測值作為特徵。
 3. 將最接近 30 分鐘後的實際溫度作為標籤。
 4. 標準化五項特徵並訓練 Ridge Regression。
-5. 使用時間序列尾端資料計算 MAE 與 RMSE。
+5. 使用時間序列尾端資料計算完整回歸指標，避免隨機切分造成未來資料洩漏。
 6. 使用全部有效資料重新訓練並保存模型。
 7. 以指定推論設備最新一筆完整感測資料產生預測；模型來源可透過 `training_motor_id` 獨立指定。
 
@@ -182,6 +191,10 @@ Ridge Regression 適合此專案的邊緣情境：模型小、訓練與推論快
 
 - **MAE**：平均絕對誤差，直觀反映預測平均偏差多少 °C。
 - **RMSE**：均方根誤差，會對少數較大的誤差給予更高懲罰。
+- **R²**：表示模型相對於只看平均值可解釋的變異；可能為負值。
+- **MAPE**：相對誤差百分比；真值為零的樣本不納入此項計算。
+- **Precision／Recall／F1**：分別觀察異常告警的可信度、異常涵蓋率與兩者平衡。
+- **ROC-AUC／PR-AUC**：不只評估單一溫度門檻；類別不平衡時應優先參考 PR-AUC。
 
 > MAE 與 RMSE 越低通常代表驗證誤差越小，但合成資料上的低誤差不等於真實環境準確度。上線前應使用各設備的真實歷史資料重新訓練與驗證。
 
@@ -200,6 +213,14 @@ flowchart LR
 ```
 
 Gemini 負責理解問題、選擇工具與整理回答；數值預測由後端 Ridge 模型執行，不是由 Gemini 生成或猜測。
+
+## 物件與資源生命週期
+
+- FastAPI 啟動時透過 lifespan 建立 Gemini client、初始化資料表並載入展示資料；關閉時會關閉 SDK client 並釋放 SQLAlchemy connection pool。
+- 每個 REST API 與 Agent 工具各自取得資料庫 session，無論成功或例外都會在 `finally` 關閉；寫入或推論失敗會先 rollback。
+- 每次推論建立獨立且不可覆寫的執行目錄，完成 API／工具呼叫後才將該次量測加入跨執行統計。
+- React 聊天 hook 擁有目前的 `AbortController`；停止回應、開始新對話或元件卸載時都會中止請求並忽略過期事件。
+- UI 計時器由元件持有，元件卸載時清除，避免卸載後更新狀態。
 
 ## 技術組成
 
@@ -220,6 +241,7 @@ Gemini 負責理解問題、選擇工具與整理回答；數值預測由後端 
 | POST | `/api/sensor-readings` | 寫入一筆完整感測資料 |
 | POST | `/api/predictions/train/{motor_id}` | 訓練並保存設備模型 |
 | GET | `/api/predictions/temperature/{motor_id}` | 以該設備資料預測 30 分鐘後溫度，可用 `training_motor_id` 指定模型來源 |
+| GET | `/api/performance/summary` | 取得跨多次已完成推論的效能統計 |
 
 ### 寫入感測資料
 
@@ -321,16 +343,27 @@ ORDER BY trained_at DESC;
 ```text
 .
 ├── backend/
-│   ├── main.py             # FastAPI、SSE、資料寫入與預測 API
+│   ├── main.py             # FastAPI 應用組裝入口
+│   ├── lifecycle.py        # 啟動、資料初始化與資源釋放
+│   ├── settings.py         # 環境設定
+│   ├── schemas.py          # API 請求契約
+│   ├── routers/            # 聊天、感測、預測與效能 API
+│   ├── services/           # Gemini Agent 與 SSE 串流服務
 │   ├── forecasting.py      # 特徵配對、訓練、驗證與推論
 │   ├── reporting.py        # 每次推論的 CSV、SVG 圖表與效能報表
+│   ├── evaluation.py       # 回歸、分類與描述統計指標
+│   ├── performance.py      # 跨多次推論的效能彙整
 │   ├── seed_data.py        # DEMO-1 訓練與 DEMO-2 推論資料
 │   ├── models.py           # 感測資料與模型資料表
 │   ├── migrations.py       # 舊資料庫欄位升級
 │   ├── tools.py            # Gemini 可呼叫的診斷／預測工具
 │   └── tests/
 ├── frontend/
-│   └── src/App.jsx         # 聊天介面與 SSE 串流
+│   └── src/
+│       ├── App.jsx         # 頁面組裝與版面狀態
+│       ├── components/     # 可重用 UI 元件
+│       ├── hooks/          # 聊天狀態與請求生命週期
+│       └── services/       # SSE API 與資料解析
 ├── docker-compose.yml
 └── README.md
 ```

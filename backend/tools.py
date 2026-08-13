@@ -1,7 +1,10 @@
 import json
+import time
 from database import SessionLocal
 from models import MotorSensorData
 from forecasting import ForecastError, forecast_temperature
+from reporting import update_api_duration
+
 
 def get_motor_status(motor_id: str) -> str:
     """
@@ -51,16 +54,22 @@ def get_temperature_forecast(
         training_motor_id: 訓練模型的資料來源；未提供時使用 motor_id
     """
     db = SessionLocal()
+    request_started = time.perf_counter()
     try:
-        return json.dumps(
-            forecast_temperature(
-                db,
-                motor_id,
-                auto_train=True,
-                training_motor_id=training_motor_id,
-            ),
-            ensure_ascii=False,
+        result = forecast_temperature(
+            db,
+            motor_id,
+            auto_train=True,
+            training_motor_id=training_motor_id,
         )
+        duration_ms = (time.perf_counter() - request_started) * 1000
+        aggregate = update_api_duration(
+            result["artifacts"]["system_csv"],
+            duration_ms,
+        )
+        result["tool_duration_ms"] = round(duration_ms, 6)
+        result["performance_run_count"] = aggregate["run_count"]
+        return json.dumps(result, ensure_ascii=False)
     except ForecastError as error:
         db.rollback()
         return json.dumps({"error": str(error)}, ensure_ascii=False)
