@@ -1,7 +1,14 @@
-fastapi
-uvicorn
-google-genai
-pydantic
-python-dotenv
-sqlalchemy
-psycopg2-binary
+# Web API and ASGI server
+fastapi==0.141.1
+uvicorn==0.52.4
+
+# Gemini Agent SDK
+google-genai==2.19.0
+
+# Validation and environment configuration
+pydantic==2.13.4
+python-dotenv==1.2.3
+
+# PostgreSQL persistence
+SQLAlchemy==2.0.52
+psycopg2-binary==2.9.12

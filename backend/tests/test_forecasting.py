@@ -1,9 +1,14 @@
+"""Unit and optional database tests for the temperature forecast package."""
+
 from datetime import datetime, timedelta, timezone
 import math
+from pathlib import Path
+import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
-from forecasting import (
+from forecast import (
     FEATURE_NAMES,
     ForecastError,
     TrainingExample,
@@ -13,11 +18,12 @@ from forecasting import (
     train_and_save_model,
     train_temperature_model,
 )
+from reports import config as report_config
 try:
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
-    from database import Base
+    from core.database import Base
     from models import MotorSensorData
 
     HAS_SQLALCHEMY = True
@@ -27,6 +33,23 @@ except ModuleNotFoundError:
 
 
 class ForecastingTests(unittest.TestCase):
+    """Verify feature pairing, model fitting, and persistence workflows."""
+
+    def setUp(self):
+        """Keep generated reports out of the application's runtime directory."""
+        self.report_directory = tempfile.TemporaryDirectory()
+        self.report_root_patch = patch.object(
+            report_config,
+            "REPORT_ROOT",
+            Path(self.report_directory.name),
+        )
+        self.report_root_patch.start()
+
+    def tearDown(self):
+        """Restore report configuration and remove all test artifacts."""
+        self.report_root_patch.stop()
+        self.report_directory.cleanup()
+
     def test_builds_targets_within_30_minute_tolerance(self):
         start = datetime(2026, 1, 1, tzinfo=timezone.utc)
         records = [
@@ -129,7 +152,9 @@ class ForecastingTests(unittest.TestCase):
                 auto_train=False,
             )
 
-            self.assertEqual(trained["sample_count"], 24)
+            # The final source can pair with a target 25 minutes later because
+            # the forecast contract allows a ±5 minute tolerance around 30.
+            self.assertEqual(trained["sample_count"], 25)
             self.assertEqual(result["forecast_horizon_minutes"], 30)
             self.assertEqual(
                 set(result["features"]),

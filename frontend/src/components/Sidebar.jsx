@@ -1,3 +1,5 @@
+/** @file Responsive navigation and current-session summary. */
+
 import {
   MessageSquareText,
   PanelLeftClose,
@@ -8,6 +10,7 @@ import {
 } from 'lucide-react';
 import BrandMark from './BrandMark.jsx';
 
+/** Render desktop navigation plus the mobile drawer/backdrop behavior. */
 export default function Sidebar({
   open,
   collapsed,
@@ -26,7 +29,8 @@ export default function Sidebar({
         />
       )}
       <aside
-        aria-hidden={!open}
+        aria-label="診斷導覽"
+        data-mobile-open={open}
         className={`sidebar ${open ? 'is-open' : ''} ${collapsed ? 'is-collapsed' : ''}`}
       >
         <div className="sidebar-top">

@@ -1,3 +1,5 @@
+"""Unit tests for regression, classification, and descriptive metrics."""
+
 import unittest
 
 from evaluation import (
@@ -9,6 +11,8 @@ from evaluation import (
 
 
 class EvaluationTests(unittest.TestCase):
+    """Verify metric values and invalid-input behavior."""
+
     def test_descriptive_statistics_include_tail_percentiles(self):
         metrics = descriptive_statistics([1, 2, 3, 4, 100])
 

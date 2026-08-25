@@ -1,8 +1,10 @@
+"""Write endpoint for complete edge-sensor feature vectors."""
+
 import math
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from database import get_db
+from core.database import get_db
 from models import MotorSensorData
 from schemas import SensorReadingRequest
 
@@ -16,6 +18,7 @@ def create_sensor_reading(
     db=Depends(get_db),
 ):
     """Receive one complete feature vector from an edge sensor."""
+    # Reject NaN and infinity before they can poison model training statistics.
     values = (
         request.temperature,
         request.humidity,

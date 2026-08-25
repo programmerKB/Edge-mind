@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap');
 
+/* Shared design tokens and element defaults. */
 :root {
   --sidebar-width: 270px;
   --sidebar-collapsed: 76px;
@@ -14,6 +15,7 @@ button, textarea { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 .app-shell { min-height: 100dvh; color: var(--ink); background: #fff; }
 
+/* Persistent desktop navigation; mobile overrides live near the end. */
 .sidebar {
   position: fixed;
   inset: 0 auto 0 0;
@@ -117,6 +119,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .sidebar.is-collapsed .new-chat-button, .sidebar.is-collapsed .history-item, .sidebar.is-collapsed .sidebar-action { justify-content: center; padding: 0; }
 .sidebar.is-collapsed .system-status, .sidebar.is-collapsed .profile { justify-content: center; padding-inline: 0; }
 
+/* Main application frame and sticky status header. */
 .main-panel {
   min-height: 100dvh;
   margin-left: var(--sidebar-width);
@@ -154,6 +157,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .topbar-status { display: flex; align-items: center; gap: 8px; margin-left: auto; color: #787c79; font-size: 12px; }
 .topbar-status .status-dot { width: 7px; height: 7px; }
 
+/* Empty-state onboarding and workflow suggestions. */
 .empty-state { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 40px 24px 19px; }
 .welcome { width: min(760px, 100%); margin: auto auto 40px; text-align: center; }
 .welcome-mark { display: flex; justify-content: center; margin-bottom: 22px; }
@@ -182,6 +186,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .suggestion-card strong { font-size: 14px; font-weight: 600; }
 .suggestion-card small { color: #8a8d8b; font-size: 12px; line-height: 1.35; }
 
+/* Shared composer for the welcome and active conversation layouts. */
 .composer-wrap { width: min(790px, 100%); margin: 0 auto; }
 .composer-wrap.compact {
   position: sticky;
@@ -215,6 +220,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .send-button.active { background: #272a28; }
 .composer-hint { margin: 8px 0 0; color: #a0a39f; font-size: 11px; text-align: center; }
 
+/* Conversation messages, Markdown output, and report attachments. */
 .conversation { flex: 1; overflow-y: auto; }
 .conversation-inner { width: min(790px, calc(100% - 40px)); margin: 0 auto; padding: 30px 0 70px; }
 .user-row { display: flex; justify-content: flex-end; margin: 16px 0 28px; }
@@ -240,11 +246,21 @@ button { -webkit-tap-highlight-color: transparent; }
 .markdown-body table { width: 100%; margin: 16px 0; border-collapse: collapse; font-size: 14px; }
 .markdown-body th, .markdown-body td { padding: 9px 11px; border: 1px solid #dedfdb; text-align: left; }
 .markdown-body th { background: #f5f5f2; }
+.report-attachments { margin-top: 20px; }
+.artifact-row .report-attachments { margin-top: 12px; }
+.artifact-summary { margin: 0; color: #656965; font-size: 13px; line-height: 1.6; }
+.report-attachments h3 { display: flex; align-items: center; gap: 7px; margin: 0 0 11px; color: #3d423f; font-size: 14px; }
+.report-gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.report-chart { min-width: 0; margin: 0; overflow: hidden; background: #fafaf8; border: 1px solid #e2e4df; border-radius: 12px; }
+.report-chart a { display: block; aspect-ratio: 16 / 10; padding: 8px; background: #fff; }
+.report-chart img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.report-chart figcaption { padding: 9px 11px 10px; color: #5d625e; border-top: 1px solid #ecece8; font-size: 12px; font-weight: 600; line-height: 1.4; }
 .message-actions { display: flex; gap: 5px; margin-top: 12px; opacity: 0; transition: opacity 150ms; }
 .assistant-row:hover .message-actions { opacity: 1; }
 .message-actions button { display: flex; align-items: center; gap: 5px; padding: 5px 7px; color: #858985; background: transparent; border: 0; border-radius: 6px; font-size: 11px; cursor: pointer; }
 .message-actions button:hover { color: #3c403c; background: #f2f2ef; }
 
+/* Transient Agent reasoning/tool progress cards. */
 .status-message { display: flex; align-items: flex-start; gap: 10px; width: calc(100% - 45px); margin: 0 0 9px 45px; padding: 11px 13px; color: #656965; background: #f7f7f4; border: 1px solid #ecece8; border-radius: 10px; font-size: 12px; }
 .status-icon { display: grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px; color: #6d716d; background: white; border: 1px solid #e5e6e2; border-radius: 7px; }
 .status-message div { min-width: 0; }
@@ -262,11 +278,12 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .sidebar-backdrop { display: none; }
 
+/* Collapse the sidebar into a drawer and stack charts on narrow screens. */
 @media (max-width: 800px) {
   .sidebar { width: min(290px, 86vw); transform: translateX(-102%); box-shadow: 10px 0 35px rgba(0, 0, 0, .13); transition: none; }
-  .sidebar[aria-hidden="true"] { transform: translateX(-102%); }
-  .sidebar.is-open[aria-hidden="false"] { transform: translateX(0); animation: sidebar-in 220ms ease both; }
-   sidebar-in { from { transform: translateX(-102%); } to { transform: translateX(0); } }
+  .sidebar[data-mobile-open="false"] { transform: translateX(-102%); }
+  .sidebar.is-open[data-mobile-open="true"] { transform: translateX(0); animation: sidebar-in 220ms ease both; }
+  @keyframes sidebar-in { from { transform: translateX(-102%); } to { transform: translateX(0); } }
   .sidebar.is-collapsed { width: min(290px, 86vw); }
   .sidebar.is-collapsed .sidebar-brand span { display: inline; }
   .sidebar.is-collapsed .sidebar-top { justify-content: flex-start; padding: 0 5px; }
@@ -296,6 +313,7 @@ button { -webkit-tap-highlight-color: transparent; }
   .assistant-avatar { width: 28px; height: 28px; }
   .status-message { width: calc(100% - 39px); margin-left: 39px; }
   .message-actions { opacity: 1; }
+  .report-gallery { grid-template-columns: 1fr; }
 }
 
 @media (max-height: 760px) and (min-width: 801px) {
@@ -305,7 +323,7 @@ button { -webkit-tap-highlight-color: transparent; }
   .welcome-copy { margin-block: 10px 20px; }
 }
 
+/* Respect OS accessibility preferences for motion-sensitive users. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
-

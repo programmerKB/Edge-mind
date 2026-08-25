@@ -1,6 +1,9 @@
+/** @file Auto-growing chat input and send/stop controls. */
+
 import { Plus, SendHorizontal, Square } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
+/** Render the shared composer used by both empty and active chat layouts. */
 export default function Composer({
   value,
   onChange,
@@ -14,11 +17,13 @@ export default function Composer({
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
+    // Reset first so scrollHeight can also shrink after the user deletes text.
     textarea.style.height = '0px';
     textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
   }, [value]);
 
   const handleKeyDown = (event) => {
+    // Enter submits while Shift+Enter remains available for multi-line prompts.
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       onSend();

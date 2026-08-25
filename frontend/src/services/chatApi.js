@@ -1,5 +1,8 @@
+/** @file Fetch and incrementally decode the backend's SSE chat protocol. */
+
 import { API_URL } from '../config.js';
 
+/** Convert one SSE block into its JSON data payload. */
 function parseEvent(rawEvent) {
   const dataText = rawEvent
     .split('\n')
@@ -9,6 +12,11 @@ function parseEvent(rawEvent) {
   return dataText ? JSON.parse(dataText) : null;
 }
 
+/**
+ * Stream one Agent request without waiting for the complete response body.
+ * @param {string} message
+ * @param {{signal: AbortSignal, onEvent: (event: object) => void}} options
+ */
 export async function streamChat(message, { signal, onEvent }) {
   const response = await fetch(API_URL, {
     method: 'POST',
@@ -28,8 +36,13 @@ export async function streamChat(message, { signal, onEvent }) {
   try {
     while (true) {
       const { value, done } = await reader.read();
-      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-      const events = buffer.replaceAll('\r\n', '\n').split('\n\n');
+      if (value) {
+        // Normalize line endings per chunk so the accumulated buffer is not
+        // repeatedly copied as a response grows.
+        buffer += decoder.decode(value, { stream: true }).replaceAll('\r\n', '\n');
+      }
+      if (done) buffer += decoder.decode();
+      const events = buffer.split('\n\n');
       buffer = events.pop() || '';
 
       for (const rawEvent of events) {

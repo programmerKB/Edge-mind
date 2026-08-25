@@ -1,5 +1,8 @@
+/** @file Compact application header and mobile navigation trigger. */
+
 import { ChevronDown, Menu } from 'lucide-react';
 
+/** Render the active diagnostic mode and online indicator. */
 export default function Topbar({ onOpenMenu }) {
   return (
     <header className="topbar">

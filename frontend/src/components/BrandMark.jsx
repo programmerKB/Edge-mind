@@ -1,5 +1,8 @@
+/** @file Reusable visual identity mark. */
+
 import { Activity } from 'lucide-react';
 
+/** Render a decorative, size-configurable EdgeMind logo. */
 export default function BrandMark({ size = 32 }) {
   return (
     <div

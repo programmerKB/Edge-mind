@@ -1,9 +1,11 @@
+"""Tests for deterministic and trainable demo sensor histories."""
+
 from datetime import datetime, timedelta, timezone
 import math
 from types import SimpleNamespace
 import unittest
 
-from forecasting import MIN_TRAINING_SAMPLES, build_training_examples
+from forecast import MIN_TRAINING_SAMPLES, build_training_examples
 from seed_data import (
     DEMO_INFERENCE_MOTOR_ID,
     DEMO_INFERENCE_READING_COUNT,
@@ -16,6 +18,8 @@ from seed_data import (
 
 
 class DemoSeedTests(unittest.TestCase):
+    """Verify demo datasets remain complete, separate, and trainable."""
+
     def test_demo_history_is_complete_and_trainable(self):
         reference_time = datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc)
         readings = build_demo_readings(reference_time)

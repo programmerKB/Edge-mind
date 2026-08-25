@@ -1,13 +1,15 @@
+/**
+ * Own one chat session, including request cancellation and stale-event guards.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createMessage,
+  findLastUserMessage,
+  normalizeAttachments,
+} from '../models/chatMessage.js';
 import { streamChat } from '../services/chatApi.js';
 
-const createMessage = (role, content, status) => ({
-  id: crypto.randomUUID(),
-  role,
-  content,
-  ...(status ? { status } : {}),
-});
-
+/** Return all state and actions required by the chat page. */
 export function useChat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -18,6 +20,7 @@ export function useChat() {
   useEffect(() => {
     mountedRef.current = true;
     return () => {
+      // Abort network work before unmount so a late SSE chunk cannot set state.
       mountedRef.current = false;
       activeRequestRef.current?.controller.abort();
       activeRequestRef.current = null;
@@ -25,7 +28,7 @@ export function useChat() {
   }, []);
 
   const lastUserMessage = useMemo(
-    () => [...messages].reverse().find((message) => message.role === 'user')?.content,
+    () => findLastUserMessage(messages),
     [messages],
   );
 
@@ -62,12 +65,19 @@ export function useChat() {
       await streamChat(userMessage, {
         signal: controller.signal,
         onEvent: (event) => {
+          // A stopped or superseded request may still have one decoded event in
+          // the browser queue; request IDs prevent it entering the new chat.
           if (!mountedRef.current || activeRequestRef.current?.requestId !== requestId) {
             return;
           }
           setMessages((previous) => [
             ...previous,
-            createMessage('agent', event.content, event.status),
+            createMessage(
+              'agent',
+              event.content,
+              event.status,
+              normalizeAttachments(event.attachments),
+            ),
           ]);
         },
       });
