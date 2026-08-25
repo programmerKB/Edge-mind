@@ -1,3 +1,5 @@
+/** @file Top-level responsive shell and chat/empty-state composition. */
+
 import { useEffect, useRef, useState } from 'react';
 import Composer from './components/Composer.jsx';
 import MessageList from './components/MessageList.jsx';
@@ -24,6 +26,8 @@ export default function App() {
   } = useChat();
 
   useEffect(() => {
+    // Every SSE event becomes a visible timeline item, so keep the newest one
+    // in view while preserving user-controlled scrolling between events.
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages]);
 

@@ -1,0 +1,7 @@
+# Runtime artifacts and local caches do not belong in the application image.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+outputs/
+.env
+.git/

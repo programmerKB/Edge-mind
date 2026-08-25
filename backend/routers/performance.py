@@ -1,8 +1,10 @@
+"""Read-only endpoint for aggregate inference performance."""
+
 import json
 
 from fastapi import APIRouter
 
-from reporting import REPORT_ROOT
+from reports.config import REPORT_ROOT
 
 
 router = APIRouter(prefix="/api/performance", tags=["performance"])

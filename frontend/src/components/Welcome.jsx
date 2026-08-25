@@ -1,3 +1,5 @@
+/** @file Empty-state introduction and predefined diagnostic prompts. */
+
 import { Activity, Database, Gauge, Sparkles, Wrench } from 'lucide-react';
 import BrandMark from './BrandMark.jsx';
 
@@ -28,6 +30,7 @@ const SUGGESTIONS = [
   },
 ];
 
+/** Render prompt shortcuts that exercise the application's core workflows. */
 export default function Welcome({ onSuggestion }) {
   return (
     <section className="welcome">

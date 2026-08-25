@@ -1,3 +1,4 @@
+/* Browser-level layout, typography, selection, and scrollbar defaults. */
 html, body, #root {
   min-width: 320px;
   min-height: 100%;
@@ -25,4 +26,3 @@ button, textarea { font-family: inherit; }
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover { background-color: #b9bcb8; }
-

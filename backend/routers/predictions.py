@@ -1,10 +1,12 @@
+"""REST endpoints for model training and 30-minute inference."""
+
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from database import get_db
-from forecasting import ForecastError, forecast_temperature, train_and_save_model
-from reporting import update_api_duration
+from core.database import get_db
+from forecast import ForecastError, forecast_temperature, train_and_save_model
+from services.forecast_delivery import finalize_forecast_result
 
 
 router = APIRouter(prefix="/api/predictions", tags=["predictions"])
@@ -60,7 +62,7 @@ def get_30_minute_temperature_forecast(
     training_motor_id: str | None = None,
     db=Depends(get_db),
 ):
-    """Predict from motor_id data using its own or another device's model."""
+    """Predict using the same device's model or an explicit training source."""
     request_started = time.perf_counter()
     try:
         result = forecast_temperature(
@@ -70,16 +72,8 @@ def get_30_minute_temperature_forecast(
             training_motor_id=training_motor_id,
         )
         api_duration_ms = (time.perf_counter() - request_started) * 1000
-        aggregate = update_api_duration(
-            result["artifacts"]["system_csv"],
-            api_duration_ms,
-        )
         result["api_handler_duration_ms"] = round(api_duration_ms, 6)
-        result["performance_summary"] = {
-            "run_count": aggregate["run_count"],
-            **aggregate["files"],
-        }
-        return result
+        return finalize_forecast_result(result)
     except ForecastError as error:
         db.rollback()
         raise HTTPException(

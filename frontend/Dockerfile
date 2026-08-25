@@ -1,11 +1,11 @@
 FROM node:20-slim
 WORKDIR /app
 
-# 複製套件清單並安裝
+# npm ci follows package-lock exactly and is reproducible in clean images.
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
-# 複製原始碼
+# Copy source after dependencies to preserve Docker layer caching.
 COPY . .
 
 EXPOSE 5173

@@ -24,6 +24,8 @@ services:
       - ./backend:/app
     env_file:
       - .env
+    # Bind-mounted development code uses reload; the image default omits it.
+    command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       - db
 
@@ -36,6 +38,8 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules # 保護容器內的套件不被外部覆寫
+    environment:
+      VITE_PROXY_TARGET: http://backend:8000
     depends_on:
       - backend
 volumes:

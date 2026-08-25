@@ -1,11 +1,15 @@
-"""FastAPI application composition root."""
+"""FastAPI composition root.
+
+The entry point contains wiring only: infrastructure, middleware, and route
+packages are assembled here while business behavior remains in services.
+"""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from lifecycle import application_lifespan
-from routers import chat, performance, predictions, sensors
-from settings import CORS_ORIGINS
+from core.config import settings
+from core.lifecycle import application_lifespan
+from routers.api import api_router
 
 
 app = FastAPI(
@@ -14,12 +18,9 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=list(CORS_ORIGINS),
-    allow_credentials=CORS_ORIGINS != ("*",),
+    allow_origins=list(settings.cors_origins),
+    allow_credentials=settings.cors_origins != ("*",),
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(sensors.router)
-app.include_router(predictions.router)
-app.include_router(performance.router)
-app.include_router(chat.router)
+app.include_router(api_router)

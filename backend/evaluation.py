@@ -11,20 +11,24 @@ def _paired_values(
     predicted: Sequence,
     actual: Sequence,
 ) -> list[tuple]:
+    """Validate equal lengths once before calculating paired metrics."""
     if len(predicted) != len(actual):
         raise ValueError("預測值與真值筆數必須相同")
     return list(zip(predicted, actual))
 
 
 def _safe_divide(numerator: float, denominator: float) -> float:
+    """Return zero for undefined confusion-matrix ratios."""
     return numerator / denominator if denominator else 0.0
 
 
-def percentile(values: Sequence[float], probability: float) -> float | None:
-    """Return a linearly interpolated percentile for probability 0..1."""
+def _percentile_from_sorted(
+    ordered: Sequence[float],
+    probability: float,
+) -> float | None:
+    """Interpolate a percentile from values sorted by the caller."""
     if not 0 <= probability <= 1:
         raise ValueError("percentile probability 必須介於 0 與 1")
-    ordered = sorted(float(value) for value in values if math.isfinite(float(value)))
     if not ordered:
         return None
     position = (len(ordered) - 1) * probability
@@ -36,10 +40,20 @@ def percentile(values: Sequence[float], probability: float) -> float | None:
     return ordered[lower] * (1 - weight) + ordered[upper] * weight
 
 
+def percentile(values: Sequence[float], probability: float) -> float | None:
+    """Return a linearly interpolated percentile for probability 0..1."""
+    ordered = sorted(
+        float(value) for value in values if math.isfinite(float(value))
+    )
+    return _percentile_from_sorted(ordered, probability)
+
+
 def descriptive_statistics(values: Iterable[float]) -> dict:
     """Summarize repeated measurements without hiding tail latency."""
-    numeric = [float(value) for value in values if math.isfinite(float(value))]
-    if not numeric:
+    ordered = sorted(
+        float(value) for value in values if math.isfinite(float(value))
+    )
+    if not ordered:
         return {
             "count": 0,
             "mean": None,
@@ -52,15 +66,16 @@ def descriptive_statistics(values: Iterable[float]) -> dict:
             "p99": None,
         }
     return {
-        "count": len(numeric),
-        "mean": fmean(numeric),
-        "median": median(numeric),
-        "stddev": pstdev(numeric),
-        "min": min(numeric),
-        "max": max(numeric),
-        "p90": percentile(numeric, 0.90),
-        "p95": percentile(numeric, 0.95),
-        "p99": percentile(numeric, 0.99),
+        "count": len(ordered),
+        "mean": fmean(ordered),
+        "median": median(ordered),
+        "stddev": pstdev(ordered),
+        "min": ordered[0],
+        "max": ordered[-1],
+        # Reuse one sort for all tail percentiles in the summary.
+        "p90": _percentile_from_sorted(ordered, 0.90),
+        "p95": _percentile_from_sorted(ordered, 0.95),
+        "p99": _percentile_from_sorted(ordered, 0.99),
     }
 
 
@@ -126,10 +141,19 @@ def classification_metrics(
 ) -> dict:
     """Calculate confusion-matrix metrics for binary anomaly detection."""
     pairs = _paired_values(predicted, actual)
-    tp = sum(bool(prediction) and bool(truth) for prediction, truth in pairs)
-    fp = sum(bool(prediction) and not bool(truth) for prediction, truth in pairs)
-    tn = sum(not bool(prediction) and not bool(truth) for prediction, truth in pairs)
-    fn = sum(not bool(prediction) and bool(truth) for prediction, truth in pairs)
+    tp = fp = tn = fn = 0
+    # One pass is clearer and avoids walking a large classification set four
+    # separate times.
+    for prediction, truth in pairs:
+        if bool(prediction):
+            if bool(truth):
+                tp += 1
+            else:
+                fp += 1
+        elif bool(truth):
+            fn += 1
+        else:
+            tn += 1
     precision = _safe_divide(tp, tp + fp)
     recall = _safe_divide(tp, tp + fn)
     specificity = _safe_divide(tn, tn + fp)

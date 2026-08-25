@@ -1,34 +1,23 @@
-"""Environment-backed application settings."""
+"""Compatibility exports for code that still imports top-level settings.
 
-from __future__ import annotations
+New modules should import :mod:`core.config`; this facade prevents breaking
+existing deployments while the project adopts package-based imports.
+"""
 
-import os
-
-from dotenv import load_dotenv
+from core.config import AGENT_SYSTEM_INSTRUCTION, settings
 
 
-load_dotenv()
+DATABASE_URL = settings.database_url
+MODEL_ID = settings.model_id
+AGENT_RESPONSE_TIMEOUT_SECONDS = settings.agent_response_timeout_seconds
+SEED_DEMO_DATA = settings.seed_demo_data
+CORS_ORIGINS = settings.cors_origins
 
-DATABASE_URL = os.getenv(
+__all__ = [
+    "AGENT_RESPONSE_TIMEOUT_SECONDS",
+    "AGENT_SYSTEM_INSTRUCTION",
+    "CORS_ORIGINS",
     "DATABASE_URL",
-    "postgresql://agent_user:agent_pass@db:5432/motor_monitor_db",
-)
-MODEL_ID = os.getenv("GEMINI_MODEL_ID", "gemini-3.5-flash-lite")
-SEED_DEMO_DATA = os.getenv("SEED_DEMO_DATA", "true").lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
-CORS_ORIGINS = tuple(
-    origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "*").split(",")
-    if origin.strip()
-)
-
-AGENT_SYSTEM_INSTRUCTION = (
-    "你是一個專業的工業馬達與邊緣設備診斷助手。請根據數據回答問題，"
-    "查詢狀態時呼叫狀態工具，詢問未來溫度時務必呼叫 30 分鐘預測工具。"
-    "若使用者要求用 A 設備訓練的模型推論 B 設備，請傳入 motor_id=B、"
-    "training_motor_id=A。回答請使用繁體中文，並給出具體的維護建議。"
-)
+    "MODEL_ID",
+    "SEED_DEMO_DATA",
+]

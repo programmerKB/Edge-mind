@@ -1,9 +1,21 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text
+"""SQLAlchemy persistence models.
+
+Models describe storage only; querying and orchestration live in repositories
+and services so HTTP handlers do not accumulate database rules.
+"""
+
+from sqlalchemy import Column, DateTime, Float, Index, Integer, String, Text
 from sqlalchemy.sql import func
-from database import Base
+from core.database import Base
+
 
 class MotorSensorData(Base):
+    """One timestamped environmental feature vector from an edge device."""
+
     __tablename__ = "motor_sensor_data"
+    __table_args__ = (
+        Index("ix_motor_sensor_motor_recorded_at", "motor_id", "recorded_at"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     motor_id = Column(String, index=True)
@@ -12,14 +24,14 @@ class MotorSensorData(Base):
     accel_x = Column(Float)
     accel_y = Column(Float)
     accel_z = Column(Float)
-    # 保留舊欄位，讓既有設備與 API 仍可繼續使用。
+    # Keep the legacy aggregate vibration field for deployed edge clients.
     vibration = Column(Float)
     status = Column(String)
     recorded_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class TemperatureForecastModel(Base):
-    """每台設備最近一次訓練完成的 30 分鐘溫度預測模型。"""
+    """Latest persisted 30-minute forecast model for one training device."""
 
     __tablename__ = "temperature_forecast_models"
 
@@ -29,4 +41,8 @@ class TemperatureForecastModel(Base):
     sample_count = Column(Integer, nullable=False)
     mae = Column(Float)
     rmse = Column(Float)
-    trained_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    trained_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
