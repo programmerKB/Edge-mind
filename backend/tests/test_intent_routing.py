@@ -2,7 +2,7 @@
 
 import unittest
 
-from services.intent_routing import temperature_forecast_arguments
+from edgemind.application.intent import temperature_forecast_arguments
 
 
 class IntentRoutingTests(unittest.TestCase):

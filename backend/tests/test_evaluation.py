@@ -2,7 +2,7 @@
 
 import unittest
 
-from evaluation import (
+from edgemind.domain.evaluation import (
     binary_score_metrics,
     classification_metrics,
     descriptive_statistics,

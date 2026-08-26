@@ -152,51 +152,71 @@ curl 'http://127.0.0.1:8000/api/predictions/temperature/DEMO-2?training_motor_id
 
 ```mermaid
 flowchart LR
-    UI[React Web UI] -->|SSE / REST| API[FastAPI Routers]
-    API --> SERVICE[Application Services]
-    SERVICE --> AGENT[Gemini Agent]
-    SERVICE --> FORECAST[Forecast Engine]
-    FORECAST --> REPO[Repositories]
-    REPO --> DB[(PostgreSQL)]
-    FORECAST --> REPORT[CSV / SVG Reports]
-    REPORT -->|attachments| API
-    API --> UI
+    UI[React Web UI] -->|SSE / REST| P[Presentation]
+    P --> A[Application Use Cases]
+    A --> D[Domain Rules]
+    I[Infrastructure Adapters] -. implements ports .-> A
+    I --> DB[(PostgreSQL)]
+    I --> G[Gemini]
+    I --> FS[CSV / SVG Files]
+    B[Bootstrap] --> P
+    B --> A
+    B --> I
 ```
 
-後端依賴方向為：
+後端不是只依資料夾分類，而是以 application-owned ports 保持單向依賴：
 
 ```text
-routers → services → forecast / reports / repositories → core / models
+presentation ─→ application ─→ domain
+                       ↑
+infrastructure ────────┘
+
+bootstrap 是唯一可以同時組裝所有層的 composition root
 ```
 
-純數學模組不依賴 FastAPI、Gemini 或資料庫，因此可以獨立測試。舊的頂層模組保留為極薄的 compatibility facade，避免既有腳本的 import 立即失效；專案內部的新程式則直接引用對應 package。
+| 分層 | 責任 | 禁止事項 |
+| --- | --- | --- |
+| `domain` | 感測實體、Ridge 計算、評估指標、DEMO 規則 | 不可匯入 FastAPI、SQLAlchemy、Gemini 或檔案系統 |
+| `application` | Forecast、Sensor、Agent use cases 與抽象 ports | 不可直接匯入 infrastructure 或 presentation |
+| `infrastructure` | SQLAlchemy repository／UoW、Gemini adapter、CSV／SVG 報表 | 不可匯入 presentation |
+| `presentation` | Pydantic schema、FastAPI route、SSE 編碼 | 不可直接操作 SQLAlchemy、Gemini 或報表檔案 |
+| `bootstrap` | 建立並注入所有具體實作 | 不放商業規則 |
+
+`tests/test_architecture.py` 會解析所有 Python import；若未來有人讓 domain 反向依賴 FastAPI，或讓 presentation 直接存取 SQLAlchemy，測試會立即失敗。舊的頂層 compatibility facade 已全部移除，避免新舊入口並存而繼續模糊責任。
 
 ### 專案結構
 
 ```text
 .
 ├── backend/
-│   ├── main.py                 # FastAPI 應用組裝入口
-│   ├── core/                   # 型別化設定、資料庫與生命週期
-│   ├── forecast/
-│   │   ├── engine.py           # 純 Ridge 計算、特徵配對與評估
-│   │   └── service.py          # 訓練、保存、推論與報表協調
-│   ├── reports/
-│   │   ├── charts.py           # SVG renderer
-│   │   ├── inference.py        # 單次推論報表
-│   │   ├── performance.py      # 跨執行效能彙整
-│   │   ├── artifacts.py        # 安全圖表路徑與附件 metadata
-│   │   └── io.py               # CSV 與資料集輸出
-│   ├── repositories/           # 感測資料與模型的 SQLAlchemy 查詢
-│   ├── routers/                # Chat、Sensors、Predictions、Reports API
-│   ├── services/               # Agent、工具、SSE 與 response enrichment
-│   ├── evaluation.py           # 回歸、分類與描述統計純函式
-│   ├── models.py               # SQLAlchemy 資料表模型
-│   ├── schemas.py              # Pydantic API 輸入契約
-│   ├── seed_data.py            # 可重現的 DEMO 資料
-│   ├── migrations.py           # 舊資料庫欄位與索引升級
+│   ├── main.py                 # 只公開 ASGI app
+│   ├── edgemind/
+│   │   ├── bootstrap.py        # Composition root 與依賴注入
+│   │   ├── domain/
+│   │   │   ├── entities.py     # Framework-independent 感測實體
+│   │   │   ├── forecasting.py  # 純 Ridge 計算與特徵配對
+│   │   │   ├── evaluation.py   # 回歸、分類與描述統計
+│   │   │   └── demo_data.py    # 可重現的展示資料規則
+│   │   ├── application/
+│   │   │   ├── ports.py        # Repository、UoW、報表與模型抽象
+│   │   │   ├── forecasts.py    # 訓練／推論 use cases
+│   │   │   ├── sensors.py      # 感測寫入／查詢 use cases
+│   │   │   ├── diagnostics.py  # Agent 可呼叫的診斷工具
+│   │   │   ├── agent.py        # Transport-neutral Agent orchestration
+│   │   │   └── intent.py       # 確定性預測意圖解析
+│   │   ├── infrastructure/
+│   │   │   ├── config.py       # 型別化環境設定
+│   │   │   ├── persistence/    # SQLAlchemy models、repositories、UoW
+│   │   │   ├── reporting/      # CSV、SVG、效能彙整與安全附件
+│   │   │   ├── ai/             # Google Gemini gateway
+│   │   │   └── runtime.py      # DB 初始化、DEMO seeding、資源釋放
+│   │   └── presentation/
+│   │       ├── schemas.py       # Pydantic HTTP 契約
+│   │       ├── sse.py           # SSE transport encoder
+│   │       └── api/             # FastAPI router 與 feature routes
 │   ├── requirements.txt        # 精確鎖定的 Python 直接依賴
 │   └── tests/
+│       └── test_architecture.py # 自動守住各層 import 邊界
 ├── frontend/
 │   ├── src/
 │   │   ├── components/         # 可重用 UI 元件
@@ -211,8 +231,8 @@ routers → services → forecast / reports / repositories → core / models
 
 ### 資源生命週期
 
-- FastAPI 啟動時建立 Gemini client、初始化資料表並視設定載入展示資料。
-- 每個 REST API 與 Agent 工具使用獨立資料庫 session，結束後一律關閉；失敗時 rollback。
+- FastAPI 啟動時初始化資料表並視設定載入展示資料；Gemini client 在第一次需要時建立。
+- 每個 REST API 與 Agent 工具建立獨立 Unit of Work；其中 repositories 共用同一 transaction，結束後關閉 session，失敗時 rollback。
 - 關閉應用時釋放 Gemini SDK client 與 SQLAlchemy connection pool。
 - 每次推論建立獨立、不可覆寫的輸出目錄。
 - React hook 管理 `AbortController`；停止回應、開始新對話或卸載元件時會中止過期請求。

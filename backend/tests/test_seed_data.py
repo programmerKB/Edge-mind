@@ -5,8 +5,11 @@ import math
 from types import SimpleNamespace
 import unittest
 
-from forecast import MIN_TRAINING_SAMPLES, build_training_examples
-from seed_data import (
+from edgemind.domain.forecasting import (
+    MIN_TRAINING_SAMPLES,
+    build_training_examples,
+)
+from edgemind.domain.demo_data import (
     DEMO_INFERENCE_MOTOR_ID,
     DEMO_INFERENCE_READING_COUNT,
     DEMO_INTERVAL_MINUTES,
