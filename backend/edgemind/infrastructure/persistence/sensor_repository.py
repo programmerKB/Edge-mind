@@ -1,0 +1,69 @@
+"""SQLAlchemy implementation of the application sensor repository port."""
+
+from sqlalchemy.orm import Session
+
+from edgemind.domain.entities import SensorReading
+from edgemind.infrastructure.persistence.models import MotorSensorData
+
+
+class SqlAlchemySensorRepository:
+    """Persist sensor entities while preventing ORM leakage to inner layers."""
+
+    def __init__(self, session: Session):
+        """Bind repository operations to the unit-of-work session."""
+        self._session = session
+
+    def list_readings(self, motor_id: str) -> list[SensorReading]:
+        """Return one device's complete history in chronological order."""
+        rows = (
+            self._session.query(MotorSensorData)
+            .filter(MotorSensorData.motor_id == motor_id)
+            .order_by(MotorSensorData.recorded_at.asc())
+            .all()
+        )
+        return [_to_entity(row) for row in rows]
+
+    def latest_reading(self, motor_id: str) -> SensorReading | None:
+        """Return only the newest row for a status query."""
+        row = (
+            self._session.query(MotorSensorData)
+            .filter(MotorSensorData.motor_id == motor_id)
+            .order_by(MotorSensorData.recorded_at.desc())
+            .first()
+        )
+        return _to_entity(row) if row is not None else None
+
+    def add(self, reading: SensorReading) -> SensorReading:
+        """Insert one entity and refresh generated ID and timestamp fields."""
+        row = MotorSensorData(
+            motor_id=reading.motor_id,
+            temperature=reading.temperature,
+            humidity=reading.humidity,
+            accel_x=reading.accel_x,
+            accel_y=reading.accel_y,
+            accel_z=reading.accel_z,
+            vibration=reading.vibration,
+            status=reading.status,
+        )
+        if reading.recorded_at is not None:
+            row.recorded_at = reading.recorded_at
+        self._session.add(row)
+        self._session.flush()
+        self._session.refresh(row)
+        return _to_entity(row)
+
+
+def _to_entity(row: MotorSensorData) -> SensorReading:
+    """Map a persistence row to a framework-independent domain entity."""
+    return SensorReading(
+        id=row.id,
+        motor_id=row.motor_id,
+        temperature=row.temperature,
+        humidity=row.humidity,
+        accel_x=row.accel_x,
+        accel_y=row.accel_y,
+        accel_z=row.accel_z,
+        vibration=row.vibration,
+        status=row.status,
+        recorded_at=row.recorded_at,
+    )
