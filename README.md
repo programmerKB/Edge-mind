@@ -334,7 +334,16 @@ curl -X POST http://127.0.0.1:8000/api/sensor-readings \
 
 ### 後端
 
-Docker 是建議的執行方式。若要直接在主機開發，請使用 Python 3.11，並將 `DATABASE_URL` 的主機改為 `127.0.0.1`：
+Docker 與 Python 虛擬環境是兩種不同的執行方式，**不需要同時準備**：
+
+| 執行方式 | 適用情境 | 需要準備 |
+| --- | --- | --- |
+| Docker（建議） | 啟動完整的前端、後端與 PostgreSQL | Docker 與 Docker Compose；不需要在主機建立 `.venv` |
+| 主機上的 Python 虛擬環境 | 單獨開發、測試或除錯後端 | Python 3.11、`.venv`，以及可連線的 PostgreSQL |
+
+Docker 映像會直接把 Python 套件安裝在隔離的容器內，因此使用上方「快速啟動」流程時，不必另外建立虛擬環境。若 IDE 需要在主機上解析套件，或要直接從主機執行後端，才需要建立 `.venv`；兩者可以共存，但不是必要條件。
+
+若要直接在主機開發，請將 `DATABASE_URL` 的主機改為 `127.0.0.1`，再執行：
 
 ```bash
 cd backend
@@ -344,12 +353,18 @@ python -m pip install -r requirements.txt
 python -m uvicorn main:app --reload
 ```
 
-執行測試與語法檢查：
+在已啟用的 `.venv` 中執行測試與語法檢查：
 
 ```bash
 cd backend
 python -m unittest discover -s tests -v
 PYTHONPYCACHEPREFIX=/tmp/edgemind-pycache python -m compileall -q .
+```
+
+若使用 Docker，則可在後端容器中執行測試：
+
+```bash
+docker compose exec backend python -m unittest discover -s tests -v
 ```
 
 ### 前端
