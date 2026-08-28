@@ -6,7 +6,10 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import AsyncIterator
 
-from edgemind.application.intent import temperature_forecast_arguments
+from edgemind.application.intent import (
+    temperature_forecast_arguments,
+    temperature_trajectory_arguments,
+)
 from edgemind.application.ports import AgentModelGateway, DiagnosticTools
 
 
@@ -51,8 +54,16 @@ class AgentService:
         """Yield one complete Agent interaction without transport encoding."""
         try:
             yield AgentEvent("thought", "Agent 正在分析您的請求...")
+            trajectory_arguments = temperature_trajectory_arguments(message)
             direct_arguments = temperature_forecast_arguments(message)
-            if direct_arguments:
+            if trajectory_arguments:
+                tool_calls = (
+                    ToolCall(
+                        "get_temperature_trajectory_forecast",
+                        trajectory_arguments,
+                    ),
+                )
+            elif direct_arguments:
                 tool_calls = (
                     ToolCall("get_temperature_forecast", direct_arguments),
                 )
@@ -119,5 +130,10 @@ def _observation_message(name: str, payload: dict) -> str:
         return (
             f"已完成 {payload.get('motor_id', '設備')} 的 "
             "30 分鐘溫度預測與模型評估。"
+        )
+    if name == "get_temperature_trajectory_forecast":
+        return (
+            f"已完成 {payload.get('motor_id', '設備')} 未來 5 至 30 分鐘的"
+            "溫度軌跡與過熱風險預測。"
         )
     return "後端資料已取得。"

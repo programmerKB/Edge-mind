@@ -28,3 +28,4 @@ Thumbs.db
 
 # Generated inference datasets, CSV reports, charts, and run metadata
 backend/outputs/
+backend/generated_datasets/

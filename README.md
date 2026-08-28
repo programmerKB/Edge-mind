@@ -1,6 +1,6 @@
-# EdgeMind — 邊緣設備診斷與溫度預測
+# EdgeMind — 邊緣設備診斷與多時域溫度風險研究
 
-EdgeMind 是一套面向工業馬達與邊緣設備的 AI 診斷系統。它整合感測資料、30 分鐘溫度預測、模型評估圖表與 Gemini Agent，將設備數據轉換為可讀的風險說明與維護建議。
+EdgeMind 是一套面向工業馬達與邊緣設備的 AI 診斷及研究系統。它保留既有 30 分鐘即時 Ridge 預測與 Gemini Agent，並新增「過去 60 分鐘五感測序列 → 未來 +5～+30 分鐘溫度軌跡 → 過熱風險」的可重現研究工作台。
 
 > 數值模型負責計算預測，Gemini Agent 負責理解問題、選擇工具與整理回答；Agent 不會自行猜測設備數據。
 
@@ -11,6 +11,8 @@ EdgeMind 是一套面向工業馬達與邊緣設備的 AI 診斷系統。它整�
 - [使用方式](#使用方式)
 - [系統架構](#系統架構)
 - [預測模型](#預測模型)
+- [研究工作台](#研究工作台)
+- [研究資料集](#研究資料集)
 - [推論報表與圖表](#推論報表與圖表)
 - [API 參考](#api-參考)
 - [開發與測試](#開發與測試)
@@ -20,7 +22,11 @@ EdgeMind 是一套面向工業馬達與邊緣設備的 AI 診斷系統。它整�
 ## 主要功能
 
 - 查詢設備最新溫度、濕度、XYZ 三軸加速度與震動狀態。
-- 使用五項感測特徵預測 30 分鐘後的設備溫度。
+- 保留五項單點感測特徵預測 30 分鐘後溫度的正式服務端點。
+- 以最近 12 筆（60 分鐘）資料直接預測 +5、+10、+15、+20、+25、+30 分鐘溫度軌跡。
+- 公平比較 Persistence、Direct Ridge、Ridge + History/Trend、XGBoost、GRU、LSTM、TCN、DLinear、Transformer 與 PatchTST；未安裝的研究依賴會標成 unavailable，不會產生假結果。
+- 內建 60/20/20 時間切分、30 分鐘 purged gap、3-fold walk-forward、五組特徵消融與跨設備完全保留測試。
+- 將軌跡轉為最高溫、門檻穿越、Time-to-threshold、溫升率與 Low/Medium/High 風險。
 - 支援以 A 設備訓練模型，再用該模型推論 B 設備。
 - 提供 MAE、MSE、RMSE、R²、MAPE 與誤差中位數等回歸指標。
 - 提供混淆矩陣、Precision、Recall、Specificity、F1、ROC-AUC 與 PR-AUC 等異常偵測指標。
@@ -36,10 +42,10 @@ EdgeMind 是一套面向工業馬達與邊緣設備的 AI 診斷系統。它整�
 | API | Python 3.11、FastAPI、Pydantic、Uvicorn |
 | Agent | Google Gemini、Google Gen AI SDK |
 | 資料庫 | PostgreSQL 16、SQLAlchemy |
-| 預測 | Python 標準函式庫實作的 Ridge Regression |
+| 預測 | 標準函式庫 Ridge/Persistence；研究環境可選 XGBoost 與 PyTorch GRU/LSTM/TCN/DLinear/Transformer/PatchTST |
 | 部署 | Docker、Docker Compose |
 
-後端直接依賴已在 [`backend/requirements.txt`](./backend/requirements.txt) 使用 `==` 精確鎖定；前端直接與間接依賴由 [`frontend/package-lock.json`](./frontend/package-lock.json) 鎖定，確保不同環境重建時取得一致版本。
+後端正式服務依賴在 [`backend/requirements.txt`](./backend/requirements.txt) 精確鎖定；重型研究 adapter 另在 [`backend/requirements-research.txt`](./backend/requirements-research.txt) 鎖定，避免放大一般 edge runtime。前端直接與間接依賴由 [`frontend/package-lock.json`](./frontend/package-lock.json) 鎖定。
 
 ## 快速啟動
 
@@ -67,7 +73,11 @@ cd Edge-mind
 
 ### 3. 建立環境設定
 
-在專案根目錄建立 `.env`：
+先複製部署範本，再修改 `.env`：
+
+```bash
+cp .env.example .env
+```
 
 ```dotenv
 GEMINI_API_KEY=你的_Gemini_API_Key
@@ -78,7 +88,10 @@ POSTGRES_PASSWORD=請改成高強度密碼
 POSTGRES_DB=motor_monitor_db
 DATABASE_URL=postgresql://agent_user:請改成高強度密碼@db:5432/motor_monitor_db
 
-# 展示環境使用 true；正式環境應改成 false
+# 完整十模型 CPU 環境；edge-only 部署才改成 requirements.txt
+BACKEND_REQUIREMENTS_FILE=requirements-research.txt
+
+# 展示／研究工作台使用 true；正式真實資料環境改成 false
 SEED_DEMO_DATA=true
 
 # 推論輸出與異常判定
@@ -89,8 +102,8 @@ ANOMALY_TEMPERATURE_THRESHOLD=35.0
 # Gemini 單次回應最長等待秒數
 AGENT_RESPONSE_TIMEOUT_SECONDS=60
 
-# 多個來源用逗號分隔；正式環境不要使用 *
-CORS_ORIGINS=*
+# 多個來源用逗號分隔；正式環境填實際 HTTPS 網域
+CORS_ORIGINS=http://localhost:5173
 ```
 
 `POSTGRES_PASSWORD` 必須與 `DATABASE_URL` 中的密碼一致。`.env` 已被 Git 忽略，請勿提交真實 API Key 或密碼。
@@ -98,9 +111,10 @@ CORS_ORIGINS=*
 ### 4. 啟動服務
 
 ```bash
-docker compose up -d --build
-docker compose ps
+./deploy.sh
 ```
+
+腳本會先驗證 `.env` 與 Compose、建立映像、啟動服務，並等待 PostgreSQL、後端與前端全部通過健康檢查；也可手動執行 `docker compose up -d --build`。
 
 服務入口：
 
@@ -127,6 +141,14 @@ docker compose logs --tail=100 frontend
 
 後端會執行確定性的預測工具，先透過 SSE 回傳執行狀態與 SVG 圖表附件，再由 Gemini 根據真實工具結果整理繁體中文說明。
 
+多時域軌跡與風險也有確定性 Agent 路由：
+
+```text
+請使用 DEMO-1 訓練的 Ridge History 模型，預測 DEMO-2 未來 5 到 30 分鐘的溫度軌跡與過熱風險
+```
+
+側欄切換到「研究工作台」後，可以選擇訓練／外部評估設備、history、horizons、溫度門檻與最新軌跡推論模型。「預測最新軌跡」只使用最新 12 筆及預測起點前可得的訓練標籤，六個未來真值標成 `pending`；「啟動完整實驗」則呈現資料品質與無洩漏稽核、模型比較、各 horizon 誤差、特徵消融、edge 效率及保留測試集軌跡。兩種結果分開顯示。`DEMO-1/2` 只適合確認 UI 與 API 流程。
+
 ### REST API
 
 先訓練模型：
@@ -141,10 +163,48 @@ curl -X POST http://127.0.0.1:8000/api/predictions/train/DEMO-1
 curl 'http://127.0.0.1:8000/api/predictions/temperature/DEMO-2?training_motor_id=DEMO-1&auto_train=false'
 ```
 
+執行多 horizon 研究實驗：
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/research/experiments \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "training_motor_id": "DEMO-1",
+    "evaluation_motor_id": "DEMO-2",
+    "history_minutes": 60,
+    "horizons_minutes": [5, 10, 15, 20, 25, 30],
+    "threshold_c": 35,
+    "model_names": ["persistence", "ridge_direct", "ridge_history_trend"],
+    "include_ablations": true
+  }'
+```
+
+以 `DEMO-1` 的已知歷史標籤擬合模型，對 `DEMO-2` 最新完整 12 筆產生尚待真值回填的六點軌跡：
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/research/forecasts \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "motor_id": "DEMO-2",
+    "training_motor_id": "DEMO-1",
+    "model_name": "ridge_history_trend",
+    "history_minutes": 60,
+    "horizons_minutes": [5, 10, 15, 20, 25, 30],
+    "threshold_c": 35
+  }'
+```
+
+回應只包含實際計算值。研究比較以 `experiment_id` 保存 JSON 與 CSV；最新軌跡以 `forecast_id` 另存 immutable JSON，並明確記錄 `truth_status=pending` 及 leakage audit。Compose 預設安裝七個 CPU-only 重型研究模型；若只需三個輕量 baseline，可改用：
+
+```bash
+BACKEND_REQUIREMENTS_FILE=requirements.txt docker compose build backend
+docker compose up -d backend frontend
+```
+
 第一次啟動時，系統會建立兩個不重複寫入的合成資料集：
 
-- `DEMO-1`：36 筆、每 5 分鐘一筆，僅用於模型訓練。
-- `DEMO-2`：36 筆獨立資料，用於推論與比對 30 分鐘後真值，不會被加入訓練資料。
+- `DEMO-1`：7 天／2,016 筆、每 5 分鐘一筆，含多負載、磨耗與暫態事件，僅用於模型訓練。
+- `DEMO-2`：另一台 7 天／2,016 筆獨立資料，用於跨設備流程評估與最新軌跡推論，不會被加入訓練資料。
 
 這些資料只用於確認流程，不代表真實設備表現。正式環境請設定 `SEED_DEMO_DATA=false`。
 
@@ -152,13 +212,14 @@ curl 'http://127.0.0.1:8000/api/predictions/temperature/DEMO-2?training_motor_id
 
 ```mermaid
 flowchart LR
-    UI[React Web UI] -->|SSE / REST| P[Presentation]
+    UI[React 診斷聊天 / 研究工作台] -->|SSE / REST| P[Presentation]
     P --> A[Application Use Cases]
-    A --> D[Domain Rules]
+    A --> D[Domain: Legacy Forecast + Research Engine]
     I[Infrastructure Adapters] -. implements ports .-> A
     I --> DB[(PostgreSQL)]
     I --> G[Gemini]
-    I --> FS[CSV / SVG Files]
+    I --> ML[XGBoost / PyTorch optional adapters]
+    I --> FS[CSV / SVG / Research JSON]
     B[Bootstrap] --> P
     B --> A
     B --> I
@@ -176,9 +237,9 @@ bootstrap 是唯一可以同時組裝所有層的 composition root
 
 | 分層 | 責任 | 禁止事項 |
 | --- | --- | --- |
-| `domain` | 感測實體、Ridge 計算、評估指標、DEMO 規則 | 不可匯入 FastAPI、SQLAlchemy、Gemini 或檔案系統 |
-| `application` | Forecast、Sensor、Agent use cases 與抽象 ports | 不可直接匯入 infrastructure 或 presentation |
-| `infrastructure` | SQLAlchemy repository／UoW、Gemini adapter、CSV／SVG 報表 | 不可匯入 presentation |
+| `domain` | 感測實體、legacy Ridge、序列研究引擎、切分／風險／指標、DEMO 規則 | 不可匯入 FastAPI、SQLAlchemy、Gemini 或檔案系統 |
+| `application` | Forecast、Research、Sensor、Agent use cases 與抽象 ports | 不可直接匯入 infrastructure 或 presentation |
+| `infrastructure` | SQLAlchemy repository／UoW、Gemini、optional ML adapter、CSV／SVG／JSON 報表 | 不可匯入 presentation |
 | `presentation` | Pydantic schema、FastAPI route、SSE 編碼 | 不可直接操作 SQLAlchemy、Gemini 或報表檔案 |
 | `bootstrap` | 建立並注入所有具體實作 | 不放商業規則 |
 
@@ -195,11 +256,13 @@ bootstrap 是唯一可以同時組裝所有層的 composition root
 │   │   ├── domain/
 │   │   │   ├── entities.py     # Framework-independent 感測實體
 │   │   │   ├── forecasting.py  # 純 Ridge 計算與特徵配對
+│   │   │   ├── research.py     # 多 horizon 資料、模型、切分、消融與風險
 │   │   │   ├── evaluation.py   # 回歸、分類與描述統計
 │   │   │   └── demo_data.py    # 可重現的展示資料規則
 │   │   ├── application/
 │   │   │   ├── ports.py        # Repository、UoW、報表與模型抽象
 │   │   │   ├── forecasts.py    # 訓練／推論 use cases
+│   │   │   ├── research.py     # 研究設定、執行、資料指紋與保存
 │   │   │   ├── sensors.py      # 感測寫入／查詢 use cases
 │   │   │   ├── diagnostics.py  # Agent 可呼叫的診斷工具
 │   │   │   ├── agent.py        # Transport-neutral Agent orchestration
@@ -208,13 +271,16 @@ bootstrap 是唯一可以同時組裝所有層的 composition root
 │   │   │   ├── config.py       # 型別化環境設定
 │   │   │   ├── persistence/    # SQLAlchemy models、repositories、UoW
 │   │   │   ├── reporting/      # CSV、SVG、效能彙整與安全附件
+│   │   │   ├── ml/             # optional XGBoost + 6 PyTorch adapters
 │   │   │   ├── ai/             # Google Gemini gateway
 │   │   │   └── runtime.py      # DB 初始化、DEMO seeding、資源釋放
 │   │   └── presentation/
 │   │       ├── schemas.py       # Pydantic HTTP 契約
 │   │       ├── sse.py           # SSE transport encoder
 │   │       └── api/             # FastAPI router 與 feature routes
-│   ├── requirements.txt        # 精確鎖定的 Python 直接依賴
+│   ├── scripts/                # 研究合成資料產生與資料庫匯入
+│   ├── requirements.txt        # 精確鎖定的正式服務依賴
+│   ├── requirements-research.txt # optional 完整模型比較依賴
 │   └── tests/
 │       └── test_architecture.py # 自動守住各層 import 邊界
 ├── frontend/
@@ -225,6 +291,7 @@ bootstrap 是唯一可以同時組裝所有層的 composition root
 │   │   └── services/           # SSE API 與增量資料解析
 │   ├── package.json
 │   └── package-lock.json
+├── docs/                       # 方法、資料 protocol 與完整系統架構
 ├── docker-compose.yml
 └── README.md
 ```
@@ -239,7 +306,9 @@ bootstrap 是唯一可以同時組裝所有層的 composition root
 
 ## 預測模型
 
-EdgeMind 為每個訓練設備保存獨立模型，避免不同機台的負載、環境與振動特性互相干擾。
+### 即時相容端點
+
+既有 `/api/predictions/*` 仍為每個訓練設備保存獨立 Ridge 模型，供 Agent 與現行 edge client 低成本呼叫。這條 production-compatible 路徑不等於新的正式研究 protocol。
 
 | 項目 | 設計 |
 | --- | --- |
@@ -280,6 +349,64 @@ EdgeMind 為每個訓練設備保存獨立模型，避免不同機台的負載�
 
 合成資料上的低誤差不等於真實設備準確度。上線前必須使用每台設備的真實歷史資料重新訓練與驗證。
 
+## 研究工作台
+
+`/api/research/*` 使用另一條嚴格、無洩漏的實驗流程，所有候選模型共用相同輸入、目標與資料分割：
+
+```text
+過去 12 筆 × [Temp, Humidity, Ax, Ay, Az]
+                    │
+                    ▼
+ Persistence / Ridge / Ridge+History / XGBoost / GRU / LSTM / TCN
+ / DLinear / Transformer / PatchTST
+                    │
+                    ▼
+        [+5, +10, +15, +20, +25, +30 分鐘]
+                    │
+                    ├─ MAE / RMSE / R² / Max Error（overall + 各 horizon）
+                    ├─ 訓練時間 / 推論 P95、P99 / 模型大小 / 參數量
+                    └─ Max Temp / Threshold Crossing / TTT / Heating Rate / Risk
+```
+
+| 項目 | 系統預設 |
+| --- | --- |
+| 取樣與 history | 嚴格每 5 分鐘；12 steps（名義 60 分鐘） |
+| Forecast horizons | +5、+10、+15、+20、+25、+30 分鐘，可配置到 +60 |
+| 對齊 | 必須有精確 timestamp；不以 ±5 分鐘近鄰代替、不默默補值 |
+| Holdout | 每設備依時間 60% / 20% / 20%，兩個邊界各 purge 6 steps |
+| Walk-forward | expanding window 3 folds，每 fold 同樣保留 30 分鐘 gap |
+| Feature ablation | A 溫度；B 溫度+濕度；C 溫度+XYZ；D 五特徵；E 五特徵+歷史趨勢 |
+| Cross-device | 只以 A fit/preprocess/tune，B 全部保留作外部測試 |
+| 可重現性 | 保存完整 config、資料 SHA-256、來源筆數、切分稽核與原始 JSON/CSV |
+
+三個標準函式庫模型永遠可執行；XGBoost 與六個 PyTorch 模型只有在研究依賴存在時才顯示 `available`。模型發生錯誤會顯示 `failed` 與原因，不會將示意值混入結果。
+
+完整研究問題、假設、統計分析與實驗矩陣請讀 [`docs/RESEARCH_METHOD.md`](./docs/RESEARCH_METHOD.md)，資料治理請讀 [`docs/DATASET_PROTOCOL.md`](./docs/DATASET_PROTOCOL.md)，元件與部署邊界請讀 [`docs/SYSTEM_ARCHITECTURE.md`](./docs/SYSTEM_ARCHITECTURE.md)，本次十模型實測與資料 hash 請讀 [`docs/PIPELINE_VALIDATION_V2.md`](./docs/PIPELINE_VALIDATION_V2.md)。
+
+## 研究資料集
+
+正式研究應至少先累積每設備 7 天（2,016 筆）作探索，目標 30 天（8,640 筆）以上，並涵蓋不同負載、環境、震動、啟停與過熱事件。天數只是起點；最終是否足夠仍以事件數、工況覆蓋與 learning curve 決定。
+
+專案提供 90 日、六設備、固定 seed 的 v2 合成資料，共 155,520 筆，包含日週期、負載切換、暫態高負載、21 天磨耗／維修週期、fault window 與 cross-device shift。它只用於 pipeline smoke test：
+
+```bash
+python backend/scripts/generate_research_dataset.py \
+  --output-dir backend/generated_datasets/research_v2 --days 90 --seed 42
+
+docker compose run --rm \
+  -v "$PWD/backend/generated_datasets/research_v2:/datasets:ro" \
+  backend python scripts/import_research_dataset.py \
+  /datasets/RESEARCH-A.csv /datasets/RESEARCH-B.csv \
+  /datasets/RESEARCH-C.csv /datasets/RESEARCH-D.csv \
+  /datasets/RESEARCH-E.csv /datasets/RESEARCH-F.csv
+```
+
+產生器同時寫入 `manifest.json`，記錄 sequence contract、設備角色、各 CSV SHA-256、產生器程式 SHA-256、穩定的 dataset content SHA-256 與 `research_claims_allowed=false`。protocol v2 固定為 5 分鐘 cadence；若輸出位置已存在，產生器預設拒絕覆寫，只有明確確認合成資料目標後才能加 `--overwrite`。匯入器會檢查欄位、有限值、濕度範圍、重複 timestamp、明確時區、UTC 五分鐘網格及逐設備無缺格 cadence；資料庫中已存在的 `(motor_id, recorded_at)` 預設跳過。
+
+真實 CSV 至少需要：`motor_id, recorded_at, temperature, humidity, accel_x, accel_y, accel_z`。時間必須含時區並能正規化到 UTC 五分鐘網格；`is_synthetic=true` 會被保存成 synthetic provenance，不能靠自訂 status 消除。建議另保留負載、轉速、環境溫度、維修事件、sensor calibration 與 firmware 版本在原始資料層，詳細規格見資料 protocol。
+
+Research workbench 對來源採 fail-closed：沒有 synthetic 標籤只代表「未發現合成證據」，不代表已證明是真實且可發表的資料。由於 legacy sensor table 尚未綁定經簽核的不可變 manifest，API 會將未標記資料列為 `provenance_status=unverified` 且保持 `research_claims_allowed=false`；正式研究資格必須由 frozen real-data manifest 與人工治理流程另行核准。
+
 ## 推論報表與圖表
 
 每次推論會依設定時區建立獨立輸出資料夾：
@@ -309,6 +436,22 @@ backend/outputs/
 │   ├── performance_history.csv
 │   ├── performance_summary.csv
 │   └── performance_summary.json
+├── research_datasets/
+│   ├── RESEARCH-A.csv
+│   ├── RESEARCH-B.csv
+│   ├── RESEARCH-C.csv ... RESEARCH-F.csv
+│   └── manifest.json
+├── research_experiments/{experiment_id}/
+│   ├── result.json
+│   ├── model_comparison.csv
+│   ├── horizon_metrics.csv
+│   ├── feature_ablations.csv
+│   ├── predictions.csv
+│   ├── split_manifest.csv
+│   ├── risk_events.csv
+│   └── statistical_comparisons.csv
+├── research_forecasts/{forecast_id}/
+│   └── result.json
 └── latest_run.txt
 ```
 
@@ -326,6 +469,11 @@ REST 預測回應會包含 `attachments`；聊天流程則以 `status: "artifact
 | POST | `/api/sensor-readings` | 寫入完整感測資料 |
 | POST | `/api/predictions/train/{motor_id}` | 訓練並保存設備模型 |
 | GET | `/api/predictions/temperature/{motor_id}` | 預測 30 分鐘後溫度；可指定 `training_motor_id` |
+| GET | `/api/research/config` | 取得 protocol、模型可用性與設備資料資格 |
+| POST | `/api/research/experiments` | 執行多 horizon／消融／cross-device 比較並保存結果 |
+| GET | `/api/research/experiments/{experiment_id}` | 讀取已完成研究結果 |
+| POST | `/api/research/forecasts` | 以最新完整 history 產生 pending-truth 六點軌跡與風險 |
+| GET | `/api/research/forecasts/{forecast_id}` | 讀取不可覆寫的最新軌跡結果 |
 | GET | `/api/performance/summary` | 取得跨執行效能統計 |
 | GET | `/api/report-artifacts/{path}` | 讀取預測附件中的 SVG 圖表 |
 
@@ -360,6 +508,7 @@ Docker 與 Python 虛擬環境是兩種不同的執行方式，**不需要同時
 | --- | --- | --- |
 | Docker（建議） | 啟動完整的前端、後端與 PostgreSQL | Docker 與 Docker Compose；不需要在主機建立 `.venv` |
 | 主機上的 Python 虛擬環境 | 單獨開發、測試或除錯後端 | Python 3.11、`.venv`，以及可連線的 PostgreSQL |
+| Docker 完整研究映像（預設） | 執行全部十個模型 | `docker compose up -d --build` |
 
 Docker 映像會直接把 Python 套件安裝在隔離的容器內，因此使用上方「快速啟動」流程時，不必另外建立虛擬環境。若 IDE 需要在主機上解析套件，或要直接從主機執行後端，才需要建立 `.venv`；兩者可以共存，但不是必要條件。
 
@@ -371,6 +520,12 @@ python3.11 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python -m uvicorn main:app --reload
+```
+
+主機要啟用完整研究模型時，將安裝指令改為：
+
+```bash
+python -m pip install -r requirements-research.txt
 ```
 
 在已啟用的 `.venv` 中執行測試與語法檢查：
@@ -407,7 +562,7 @@ npm run dev
 
 ### 區域網路存取
 
-Docker Compose 會讓 Vite 將 `/api` 代理到後端。區域網路裝置可直接開啟：
+Docker Compose 會讓 Nginx 提供 production build，並將 `/api` 反向代理到後端。區域網路裝置可直接開啟：
 
 ```text
 http://192.168.1.50:5173
@@ -417,6 +572,7 @@ http://192.168.1.50:5173
 
 ```dotenv
 VITE_API_URL=http://192.168.1.50:8000/api/chat_utf8
+VITE_RESEARCH_API_URL=http://192.168.1.50:8000/api/research
 ```
 
 這種分離部署模式也必須允許 API 連接埠。行動裝置中的 `127.0.0.1` 指向裝置本身，不是部署主機。
@@ -460,17 +616,9 @@ docker compose exec -T db \
 
 ### 正式部署基線
 
-目前 Compose 適合開發、展示與可信任內網。公開部署前至少應：
+Compose 已採 Nginx production build、無 reload Uvicorn、CPU-only 模型依賴、DB 啟動等待、三層健康檢查、持久化 volumes、非 root 後端及限制 log rotation；PostgreSQL 不對外公開，後端管理埠只綁定 loopback。公開部署仍須在主機或 ingress 啟用 HTTPS、登入／授權／rate limit、secret manager、監控告警與資料庫備份，並將 `CORS_ORIGINS` 設為真實 HTTPS 網域。
 
-- 設定 `SEED_DEMO_DATA=false`。
-- 將 CORS 限制為實際前端網域。
-- 前端使用 production build 與正式 Web Server。
-- 後端停用 Uvicorn `--reload`。
-- 不對外公開 PostgreSQL 5432。
-- 啟用 HTTPS、登入、授權與 rate limit。
-- 使用 secret manager 保存 API Key 與資料庫密碼。
-- 加入健康檢查、監控、告警、自動備份與還原演練。
-- 使用真實設備資料重新訓練，並制定可接受的誤差與告警門檻。
+健康檢查：`/api/health/live` 檢查程序，`/api/health/ready` 同時檢查資料庫。正式資料應設定 `SEED_DEMO_DATA=false`。
 
 ## 常見問題
 
@@ -511,13 +659,23 @@ docker compose logs --tail=100 db
 
 ### Docker 權限不足
 
-依作業系統設定 Docker 使用者群組，或在必要時以具備 Docker socket 權限的帳號執行。重新登入後可用 `docker ps` 驗證。
+Linux 主機可由管理員執行下列命令，之後登出再登入：
+
+```bash
+sudo usermod -aG docker "$USER"
+docker ps
+```
+
+不要將 Docker socket 設成 world-writable；CI/CD 則應使用具 Docker 權限的專用 runner。
 
 ## 已知限制
 
-- Ridge 模型假設特徵與目標近似線性，未涵蓋複雜長期序列效應。
-- 新資料不會自動觸發重新訓練，需依資料量或週期呼叫訓練 API。
-- 驗證指標來自單次時間切分，不等同跨季節、跨負載條件的完整驗證。
+- 既有 `/api/predictions/*` 仍是單點 Ridge；序列、多 horizon 與 walk-forward 比較位於 `/api/research/*`。
+- 研究實驗目前在單一 HTTP request 中同步執行；大量資料與七個重型模型應部署獨立 worker／job queue 後再提供多人共用。
+- 最新軌跡 endpoint 目前會在 request 內以所有時間有效的完整 sequence 重新擬合指定模型；尚未提供經 promotion 的 model bundle、freshness SLA、自動 truth backfill 或 drift monitor。
+- 新資料不會自動觸發 production Ridge 重訓或研究實驗，需由維運／研究 protocol 明確啟動。
+- XGBoost 與神經模型使用固定、預註冊的輕量超參數；正式論文若調參，必須只用 training/validation 並保存搜尋空間與 seed。
+- 系統能驗證時間洩漏與合成標籤，不能替代人工確認資料同意、設備校正、維修標註與工況代表性。
 - 尚未提供使用者登入、細粒度授權、rate limit 與完整稽核機制。
 - `DEMO-1` 與 `DEMO-2` 是合成資料，只能用於功能驗證。
 

@@ -1,0 +1,14 @@
+# Production/API dependencies.
+-r requirements.txt
+
+# Optional research adapters.  These are excluded from the small edge runtime
+# image because XGBoost and PyTorch (GRU/LSTM/TCN/DLinear/Transformer/PatchTST)
+# substantially increase its size.
+# CPU-only packages avoid pulling CUDA/NCCL into edge and CI deployments.
+--extra-index-url https://download.pytorch.org/whl/cpu
+# Versions are the newest Python 3.11-compatible releases selected for this
+# study environment; keep them fixed when reporting experiment results.
+numpy==2.4.6
+scikit-learn==1.9.0
+xgboost-cpu==3.2.0
+torch==2.13.0+cpu
