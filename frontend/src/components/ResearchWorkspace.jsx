@@ -22,6 +22,7 @@ import { useResearch } from '../hooks/useResearch.js';
 import {
   FORECAST_MODELS,
   FORECAST_MODEL_IDS,
+  forecastModelLabel,
 } from '../models/forecastModel.js';
 import './ResearchWorkspace.css';
 
@@ -236,6 +237,10 @@ function ablationRows(report) {
       id: item.id || `ablation-${index}`,
       label: item.label || item.name || item.experiment || `組合 ${index + 1}`,
       model: item.model || item.model_name || '',
+      modelLabel: item.model_display_name
+        || item.model_label
+        || forecastModelLabel(item.model || item.model_name || ''),
+      evaluationScope: item.evaluation_scope || 'locked_test',
       features: Array.isArray(item.features) ? item.features.join(' + ') : item.features || '',
       status: item.status || 'available',
       reason: item.reason || item.error || '',
@@ -787,14 +792,26 @@ function HorizonMetrics({ rows }) {
 function FeatureAblation({ rows }) {
   const available = rows.filter((row) => row.mae !== null);
   const maxMae = Math.max(0, ...available.map((row) => row.mae));
+  const sourceGroups = rows.reduce((groups, row) => {
+    const label = row.modelLabel || row.model || '未標示模型';
+    groups[label] = [...(groups[label] || []), row.id];
+    return groups;
+  }, {});
+  const sourceSummary = Object.entries(sourceGroups)
+    .map(([model, ids]) => `${model}（${ids.join('、')}）`)
+    .join('；');
   if (!rows.length) return <ResultEmpty title="尚無 Feature Ablation" copy="完整實驗會比較溫度、濕度、震動與歷史趨勢的增益。" />;
   return (
     <section className="result-card" aria-labelledby="ablation-title">
       <div className="result-heading"><div><span className="section-kicker">Feature contribution</span><h2 id="ablation-title">多感測器特徵消融</h2></div></div>
+      <div className="data-source-panel ablation-source" aria-label="特徵消融模型與數據來源">
+        <div><span>使用模型</span><strong>{sourceSummary}</strong></div>
+        <div><span>數據與指標</span><strong>歷史鎖定測試集（locked test）的 MAE</strong></div>
+      </div>
       <div className="ablation-list">
         {rows.map((row) => (
           <div className="ablation-row" key={row.id}>
-            <div className="ablation-label"><strong>{row.label}</strong><span>{row.features || row.model || '特徵組合'}</span></div>
+            <div className="ablation-label"><strong>{row.label}</strong><span>模型：{row.modelLabel || row.model || '未標示'} · 特徵：{row.features || '未標示'}</span></div>
             {row.mae === null ? <span className="ablation-unavailable" title={row.reason}>{row.status === 'unavailable' ? '不可用' : '無數值'}</span> : <>
               <span className="ablation-bar"><i style={{ width: `${maxMae ? Math.max(5, (row.mae / maxMae) * 100) : 0}%` }} /></span>
               <strong className="ablation-value">{formatNumber(row.mae)}<small> MAE</small></strong>
@@ -823,6 +840,11 @@ function RiskPanel({ risk, threshold, live = false }) {
     <section className={`result-card risk-card${live ? ' live-forecast-card' : ''}`} aria-labelledby={live ? 'live-risk-title' : 'risk-title'}>
       <div className="result-heading"><div><span className="section-kicker">{live ? 'Current pending-truth forecast' : 'Offline risk evaluation'}</span><h2 id={live ? 'live-risk-title' : 'risk-title'}>{live ? '最新溫度軌跡與過熱風險' : '保留樣本風險評估'}</h2></div><span className={`risk-badge ${riskLevelClass(level)}`}>{level}</span></div>
       {live && risk.researchClaimsAllowed === false && <StatusAlert tone="error"><strong>{risk.syntheticDetected ? '合成／DEMO 資料' : '來源尚未驗證'}</strong><p>{risk.syntheticDetected ? '這筆軌跡只能驗證系統流程，不可作為真實效能或設備安全結論。' : '此資料尚未連結經簽核的 frozen manifest，只能作探索與流程驗證。'}</p></StatusAlert>}
+      {!live && risk.sourceModel && <div className="data-source-panel risk-source" aria-label="風險評估模型與數據來源">
+        <div><span>本區數據模型</span><strong>{risk.sourceModel}</strong></div>
+        <div><span>模型選擇依據</span><strong>{risk.selectionScope || '開發期指標'}{risk.selectionMae === null ? '' : ` MAE ${formatNumber(risk.selectionMae, 3)}`}</strong></div>
+        <div><span>軌跡與分類指標範圍</span><strong>{risk.forecastScope || '保留測試集'} · 同一模型</strong></div>
+      </div>}
       {(risk.sourceModel || risk.deviceId) && <p className="forecast-source">{live
         ? <>以 <strong>{risk.sourceModel}</strong> 對 <strong>{risk.deviceId || '推論設備'}</strong> 最新完整 <strong>{formatInteger(risk.historySteps)}</strong> 筆感測序列預測；未來真值目前為 <strong>{risk.truthStatus || 'pending'}</strong>，未參與推論。{risk.currentTemperature !== null ? <> 起點溫度：<strong>{formatNumber(risk.currentTemperature, 1)} °C</strong>。</> : null}{risk.anchorTime ? <> 預測起點：<strong>{risk.anchorTime}</strong>。</> : null}{risk.forecastId ? <> Forecast ID：<strong>{risk.forecastId}</strong>。</> : null}</>
         : <>依 <strong>{risk.selectionScope || '開發期指標'}</strong>{risk.selectionMae !== null ? <> MAE <strong>{formatNumber(risk.selectionMae, 3)}</strong></> : null}，選取顯示模型 <strong>{risk.sourceModel}</strong>；此卡是 <strong>{risk.forecastScope || '保留測試集'}</strong> 最後一個已具真值樣本的離線例子，不是即時讀值或模型 promotion 證據。</>}</p>}

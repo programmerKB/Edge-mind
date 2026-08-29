@@ -1855,13 +1855,19 @@ def run_feature_ablations(
     registry = build_default_registry()
     results: list[dict[str, Any]] = []
     for spec in specs:
+        registration = registry.get(spec.model_name)
         base = {
             "id": spec.id,
             "label": spec.label,
             "features": list(spec.feature_names),
             "model": spec.model_name,
+            "model_display_name": (
+                registration.display_name
+                if registration is not None
+                else spec.model_name
+            ),
+            "evaluation_scope": "locked_test",
         }
-        registration = registry.get(spec.model_name)
         if registration is None or registration.factory is None:
             results.append({**base, "status": "unavailable"})
             continue

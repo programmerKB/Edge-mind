@@ -671,7 +671,13 @@ class RegistryAndExperimentTests(unittest.TestCase):
         self.assertEqual(len(DEFAULT_ABLATIONS), 5)
         self.assertTrue(all(item["status"] == "available" for item in results))
         self.assertEqual(results[0]["features"], ["temperature"])
+        self.assertEqual(results[0]["model_display_name"], "Direct Ridge")
+        self.assertEqual(results[0]["evaluation_scope"], "locked_test")
         self.assertEqual(results[-1]["model"], "ridge_history_trend")
+        self.assertEqual(
+            results[-1]["model_display_name"],
+            "Ridge + History/Trend",
+        )
         self.assertIn("by_horizon", results[-1]["test"])
 
 
