@@ -20,6 +20,7 @@ X_{t-55:t}\in\mathbb{R}^{12\times5}
 - Research workbench 已實作：精確 5 分鐘對齊的 12×5 history、+5…+30 分鐘 direct multi-horizon、60/20/20 與 6-step gaps、3-fold walk-forward runtime default、Direct Ridge／Ridge + History、feature ablation、軌跡與事件風險、逐樣本／split ledger、paired device-day block bootstrap CI 與 JSON／CSV artifacts。
 - Research optional adapters 已實作：DLinear、LSTM、TCN、PatchTST；Compose 預設安裝 CPU-only `backend/requirements-research.txt`，資源受限 image 才明確 override 為只含兩個 Ridge 模型的 `requirements.txt`。
 - Current forecast path 已實作：`POST /api/research/forecasts` 先以 chronological train／validation／locked-test 和 purge gap 計算歷史誤差，再以全部已知標籤重訓，對最新精確 12-step history 產生六點 pending-truth 軌跡、風險、三張圖、資料指紋與 leakage audit；前端與 Agent 均可觸發，歷史誤差與尚未發生的即時真值保持語意隔離。
+- 歷史 actual-vs-predicted 圖固定使用 request 中最遠 horizon，沿時間顯示 locked test 最近最多 60 個已觀測樣本；不能只拿最後一條 trajectory，否則單一 horizon 請求會退化成無法辨識的一個點。
 - Runtime v2 已完成：Ridge development-only alpha grid、四個 PyTorch 模型 validation MAE early stopping、最佳 epoch 凍結後 development refit，以及相對 Direct Ridge 的 locked-test skill score。尚未成為一鍵正式論文 pipeline的部分是：多 seed orchestration、完整架構超參數 trial budget、自動 Holm orchestration與真正 target-hardware energy benchmark。
 - `DEMO-1`／`DEMO-2` 是流程測試資料，不能用來主張真實設備準確度或模型優越性。
 

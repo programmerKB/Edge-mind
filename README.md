@@ -194,7 +194,7 @@ curl -X POST http://127.0.0.1:8000/api/research/forecasts \
   }'
 ```
 
-回應只包含實際計算值。最新軌跡回應包含 `historical_evaluation` 的 validation／locked-test 指標，以及即時 trajectory、risk、三張 SVG、lineage 與 leakage audit；`truth_status=pending` 只描述尚未到達的即時目標時間。研究比較以 `experiment_id` 保存 JSON 與 CSV；最新軌跡以 `forecast_id` 另存 immutable JSON。Compose 預設安裝四個 CPU-only PyTorch 研究模型；若只需兩個 Ridge 模型，可改用：
+回應只包含實際計算值。最新軌跡回應包含 `historical_evaluation` 的 validation／locked-test 指標，以及即時 trajectory、risk、三張 SVG、lineage 與 leakage audit；歷史實際／預測圖會固定同一 horizon，顯示鎖定測試集最近最多 60 個時間點，單一 horizon 請求也不會退化成只有一個點。`truth_status=pending` 只描述尚未到達的即時目標時間。研究比較以 `experiment_id` 保存 JSON 與 CSV；最新軌跡以 `forecast_id` 另存 immutable JSON。Compose 預設安裝四個 CPU-only PyTorch 研究模型；若只需兩個 Ridge 模型，可改用：
 
 ```bash
 BACKEND_REQUIREMENTS_FILE=requirements.txt docker compose build backend

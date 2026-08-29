@@ -31,6 +31,7 @@ from edgemind.domain.research import (
 ALL_RESEARCH_MODELS = DEFAULT_MODEL_NAMES
 MIN_THRESHOLD_C = 20.0
 MAX_THRESHOLD_C = 120.0
+HISTORICAL_CHART_POINT_LIMIT = 60
 
 
 def _validated_threshold(value: float) -> float:
@@ -93,13 +94,48 @@ def _refit(model, examples) -> None:
 
 
 def _compact_historical_evaluation(evaluation: dict) -> dict:
-    """Keep auditable metrics and one chart sample without bulky ledgers."""
+    """Keep auditable metrics and a bounded time series without bulky ledgers."""
+    prediction_records = [
+        record
+        for record in evaluation.get("prediction_records", [])
+        if isinstance(record, dict)
+    ]
+    chart_horizon = max(
+        (
+            int(record["horizon_minutes"])
+            for record in prediction_records
+            if isinstance(record.get("horizon_minutes"), (int, float))
+        ),
+        default=None,
+    )
+    chart_records = (
+        [
+            record
+            for record in prediction_records
+            if int(record.get("horizon_minutes", -1)) == chart_horizon
+        ][-HISTORICAL_CHART_POINT_LIMIT:]
+        if chart_horizon is not None
+        else []
+    )
     return {
         "truth_status": "observed",
         "overall": evaluation["overall"],
         "target_distribution": evaluation["target_distribution"],
         "by_horizon": evaluation["by_horizon"],
         "latest_forecast": evaluation["latest_forecast"],
+        "chart_series": {
+            "horizon_minutes": chart_horizon,
+            "point_count": len(chart_records),
+            "points": [
+                {
+                    "origin_time": record.get("origin_time"),
+                    "target_time": record.get("target_time"),
+                    "actual_temperature_c": record.get("actual"),
+                    "predicted_temperature_c": record.get("predicted"),
+                }
+                for record in chart_records
+            ],
+        },
         "inference_latency_ms": evaluation["inference_latency_ms"],
     }
 

@@ -150,6 +150,26 @@ class ResearchResultTests(unittest.TestCase):
                     "risk": {"threshold_c": 35.0},
                     "historical_evaluation": {
                         "locked_test": {
+                            "chart_series": {
+                                "horizon_minutes": 5,
+                                "points": [
+                                    {
+                                        "target_time": "2026-01-01T00:05:00+00:00",
+                                        "predicted_temperature_c": 31.8,
+                                        "actual_temperature_c": 32.0,
+                                    },
+                                    {
+                                        "target_time": "2026-01-01T00:10:00+00:00",
+                                        "predicted_temperature_c": 32.0,
+                                        "actual_temperature_c": 32.2,
+                                    },
+                                    {
+                                        "target_time": "2026-01-01T00:15:00+00:00",
+                                        "predicted_temperature_c": 32.1,
+                                        "actual_temperature_c": 32.3,
+                                    },
+                                ],
+                            },
                             "latest_forecast": {
                                 "trajectory": [
                                     {
@@ -179,6 +199,11 @@ class ResearchResultTests(unittest.TestCase):
             self.assertTrue(
                 all(Path(chart).is_file() for chart in saved["artifacts"]["charts"])
             )
+            historical_svg = Path(saved["artifacts"]["charts"][1]).read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("+5 分鐘", historical_svg)
+            self.assertEqual(historical_svg.count("<circle"), 6)
             self.assertEqual(len(saved["attachments"]), 3)
             relative_chart = saved["attachments"][0]["url"].removeprefix(
                 "/api/report-artifacts/"

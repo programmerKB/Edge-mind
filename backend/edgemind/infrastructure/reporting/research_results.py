@@ -354,25 +354,48 @@ def _create_research_forecast_charts(result: dict, directory: Path) -> list[str]
     locked_test = (
         (result.get("historical_evaluation") or {}).get("locked_test") or {}
     )
-    latest = locked_test.get("latest_forecast") or {}
+    chart_series = locked_test.get("chart_series") or {}
     historical_trajectory = [
         point
-        for point in latest.get("trajectory", [])
+        for point in chart_series.get("points", [])
         if isinstance(point, Mapping)
         and isinstance(point.get("predicted_temperature_c"), (int, float))
         and isinstance(point.get("actual_temperature_c"), (int, float))
     ]
+    historical_horizon = chart_series.get("horizon_minutes")
+    if not historical_trajectory:
+        latest = locked_test.get("latest_forecast") or {}
+        historical_trajectory = [
+            point
+            for point in latest.get("trajectory", [])
+            if isinstance(point, Mapping)
+            and isinstance(point.get("predicted_temperature_c"), (int, float))
+            and isinstance(point.get("actual_temperature_c"), (int, float))
+        ]
+        historical_horizon = None
     if historical_trajectory:
         historical_chart = (
             directory / "charts" / "02_historical_actual_vs_predicted.svg"
         )
-        historical_labels = [
-            f'+{int(point.get("horizon_minutes", 0))} 分'
-            for point in historical_trajectory
-        ]
+        if historical_horizon is not None:
+            historical_labels = [
+                str(point.get("target_time") or point.get("origin_time") or index)[
+                    5:16
+                ].replace("T", " ")
+                for index, point in enumerate(historical_trajectory)
+            ]
+            historical_title = (
+                f"{model_label} 歷史鎖定測試 +{int(historical_horizon)} 分鐘"
+            )
+        else:
+            historical_labels = [
+                f'+{int(point.get("horizon_minutes", 0))} 分'
+                for point in historical_trajectory
+            ]
+            historical_title = f"{model_label} 歷史鎖定測試樣本"
         write_line_chart(
             historical_chart,
-            f"{model_label} 歷史鎖定測試樣本",
+            historical_title,
             [
                 (
                     "實際溫度",
