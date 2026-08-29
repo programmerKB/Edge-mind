@@ -24,22 +24,15 @@ class OptionalResearchModelTests(unittest.TestCase):
         self.assertEqual(
             set(catalogue),
             {
-                "persistence", "ridge_direct", "ridge_history_trend", "xgboost",
-                "gru", "lstm", "tcn", "dlinear", "transformer", "patchtst",
+                "ridge_direct", "ridge_history_trend", "dlinear",
+                "lstm", "tcn", "patchtst",
             },
         )
-        for name in (
-            "xgboost", "gru", "lstm", "tcn", "dlinear", "transformer", "patchtst",
-        ):
+        for name in ("dlinear", "lstm", "tcn", "patchtst"):
             self.assertIn(catalogue[name]["status"], {"available", "unavailable"})
             self.assertTrue(catalogue[name]["suggested_dependencies"])
             if catalogue[name]["status"] == "unavailable":
                 self.assertIn("missing optional modules", catalogue[name]["reason"])
-
-        self.assertEqual(
-            catalogue["xgboost"]["required_modules"],
-            ["numpy", "sklearn", "xgboost"],
-        )
 
     @unittest.skipUnless(
         importlib.util.find_spec("numpy") and importlib.util.find_spec("torch"),
@@ -50,9 +43,7 @@ class OptionalResearchModelTests(unittest.TestCase):
 
         config = ResearchConfig()
         inputs = torch.zeros((2, config.history_steps, len(BASE_FEATURE_NAMES)))
-        for architecture in (
-            "gru", "lstm", "tcn", "dlinear", "transformer", "patchtst",
-        ):
+        for architecture in ("dlinear", "lstm", "tcn", "patchtst"):
             with self.subTest(architecture=architecture):
                 adapter = TorchSequenceAdapter(config, BASE_FEATURE_NAMES, architecture)
                 outputs = adapter._network()(inputs)
@@ -62,10 +53,7 @@ class OptionalResearchModelTests(unittest.TestCase):
                 )
 
     @unittest.skipUnless(
-        all(
-            importlib.util.find_spec(name)
-            for name in ("numpy", "sklearn", "torch", "xgboost")
-        ),
+        importlib.util.find_spec("numpy") and importlib.util.find_spec("torch"),
         "Complete research dependencies are not installed",
     )
     def test_every_optional_adapter_can_fit_and_predict(self):
@@ -86,9 +74,7 @@ class OptionalResearchModelTests(unittest.TestCase):
         examples = build_sequence_dataset(rows, config).examples
         registry = register_optional_research_models(build_default_registry())
 
-        for name in (
-            "xgboost", "gru", "lstm", "tcn", "dlinear", "transformer", "patchtst",
-        ):
+        for name in ("dlinear", "lstm", "tcn", "patchtst"):
             with self.subTest(model=name):
                 registration = registry.get(name)
                 model = registration.factory(config, BASE_FEATURE_NAMES)

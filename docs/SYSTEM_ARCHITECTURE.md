@@ -25,8 +25,8 @@
 | --- | --- | --- | --- |
 | 感測輸入 | 單筆溫濕度、XYZ；PostgreSQL | 讀取同表並嚴格檢查 exact cadence、complete/finite、duplicate | 帶 event/ingestion time、品質與裝置 metadata 的版本化 frames |
 | Forecast input | 最新單點 5 features | 最近 12 steps × 5 features；History Ridge 加 summaries | 線上 sequence buffer 與版本化 feature schema |
-| Forecast output | +30 分鐘單一溫度 | 離線比較及最新 12-step 的 +5/+10/+15/+20/+25/+30 pending-truth 軌跡與衍生 risk | Promoted trajectory API、truth backfill、event warning |
-| 模型 | 標準函式庫 Ridge | 內建 Persistence／兩種 Ridge；研究依賴啟用 XGBoost／GRU／LSTM／TCN／DLinear／Transformer／PatchTST | 公平 tuning、多 seeds、可部署 artifact variants |
+| Forecast output | +30 分鐘單一溫度 | 每次先完成歷史 locked-test 評估與全資料重訓，再輸出最新 12-step 的 +5/+10/+15/+20/+25/+30 pending-truth 軌跡、risk 與三張圖 | Promoted trajectory API、truth backfill、event warning |
+| 模型 | 標準函式庫 Ridge | Direct Ridge／Ridge + History/Trend；研究依賴啟用 DLinear／LSTM／TCN／PatchTST | 公平 tuning、多 seeds、可部署 artifact variants |
 | Validation | 最後 20%，無獨立 test | 60/20/20 + 6-step gap + runtime 預設 3-fold walk-forward；external device 全量 holdout | 預註冊 folds、locked-test access audit、block statistics |
 | 模型保存 | 每 motor 最新 JSON | 每實驗 immutable JSON + 七張 ledger／分析 CSV 及 checksum | model versions、stage、lineage、完整 preprocessing bundle |
 | Risk | 固定溫度門檻分類報表 | trajectory max/crossing/TTT/rate、Low/Medium/High、boundary-aware event evaluation | 工程核准與版本化 policy |
@@ -60,7 +60,7 @@ flowchart LR
     subgraph Research[Offline Research Plane]
         ORCH[Experiment Orchestrator]
         PRE[Fold-owned Preprocessing]
-        MODELS[Persistence / Ridge / XGBoost<br/>GRU / LSTM / TCN / DLinear<br/>Transformer / PatchTST]
+        MODELS[Direct Ridge / Ridge + History<br/>DLinear / LSTM / TCN / PatchTST]
         EVAL[Regression + Risk + Statistics]
         BENCH[Target-hardware Benchmark]
         REG[(Model Registry)]
@@ -121,7 +121,7 @@ flowchart TD
 
 ## 5. Online forecast sequence
 
-下圖是正式 serving target。現有 prototype 已提供 `/api/research/forecasts`：每次 request 只用 forecast origin 以前可得的完整標籤重新擬合所選 registry adapter，對最新精確 12 格推論，保存 immutable JSON 並標示未來真值 `pending`。它尚未載入 promoted model bundle，也尚未自動 backfill truth；因此不能把 prototype latency 當成正式常駐模型 serving latency。
+下圖是正式 serving target。現有 prototype 已提供 `/api/research/forecasts`：每次 request 只用 forecast origin 以前可得的完整標籤，先做帶 purge gap 的 chronological validation／locked-test 評估，再以全部已知歷史標籤重訓所選 registry adapter，對最新精確 12 格推論，保存 immutable JSON、三張 SVG，並標示未來真值 `pending`。它尚未載入 promoted model bundle，也尚未自動 backfill truth；因此不能把 prototype latency 當成正式常駐模型 serving latency。
 
 ```mermaid
 sequenceDiagram
@@ -191,7 +191,7 @@ Application use cases 協調 domain 與 ports：
 
 - PostgreSQL：sensor metadata、curated frames index、model registry metadata、prediction／truth、experiment status。
 - Object／filesystem artifact store：raw partitions、Parquet windows、model bundles、run outputs、charts。
-- Model adapters：`RidgeAdapter`, `XGBoostAdapter`, `TorchSequenceAdapter` 共用 `fit/predict/save/load/metadata` port。
+- Model adapters：`RidgeAdapter`, `TorchSequenceAdapter` 共用 `fit/predict/save/load/metadata` port。
 - Runtime adapter：對 target device 的 ONNX Runtime／TFLite／原生 runtime；同一 test vectors 驗證輸出容差。
 - Reporting：由 prediction parquet 產生 tables/charts；禁止把示意值寫入結果。
 - Telemetry：latency histogram、RSS、coverage、data freshness、error type、model version；不記錄 secret 或不必要的完整 prompt。
@@ -327,7 +327,7 @@ Registry stage 建議：`research → candidate → shadow → production → re
 
 POST 支援 `training_motor_id`, `evaluation_motor_id`, `history_minutes`, `horizons_minutes`, `threshold_c`, `model_names`, `include_ablations`, `sampling_minutes`, `train_fraction`, `validation_fraction`, `gap_steps`, `walk_forward_folds`, `random_seed`。額外欄位由 schema 拒絕，horizon 限定 5–60 分鐘且 gap 不得小於最遠 horizon 所需 steps；目前 application safety envelope 另限制 `threshold_c` 為 20–120°C，但其中實際採用值仍須由設備規格與安全審查核准。
 
-Forecast POST 支援 `motor_id`, `training_motor_id`, `model_name`, `history_minutes`, `horizons_minutes`, `threshold_c`, `sampling_minutes`, `random_seed`。最新 history 任一格缺失、重複、不完整或非 finite 都 fail closed；模型 training label 晚於 forecast origin 也會拒絕。回應包含 source history shape/time、所有 target time／prediction、risk、model cost、資料 hash 與 `future_truth_used_for_prediction=false`。
+Forecast POST 支援 `motor_id`, `training_motor_id`, `model_name`, `history_minutes`, `horizons_minutes`, `threshold_c`, `sampling_minutes`, `random_seed`。最新 history 任一格缺失、重複、不完整或非 finite 都 fail closed；模型 training label 晚於 forecast origin 也會拒絕。回應包含 historical validation／locked-test MAE、RMSE、R²、MAPE、source history shape/time、所有 target time／prediction、risk、model cost、三張圖、資料 hash 與 `future_truth_used_for_prediction=false`。
 
 研究結果保存於：
 
@@ -346,7 +346,7 @@ Forecast POST 支援 `motor_id`, `training_motor_id`, `model_name`, `history_min
 └── result.json
 ```
 
-`requirements.txt` 只讓三個無額外依賴模型 available；Compose 預設使用 CPU-only `requirements-research.txt`，因此會註冊 XGBoost／GRU／LSTM／TCN／DLinear／Transformer／PatchTST adapters。API config 回傳的 availability 是當下 runtime 真相；資源受限 edge image 可明確 override 回輕量 requirements。
+`requirements.txt` 只讓兩個 Ridge 模型 available；Compose 預設使用 CPU-only `requirements-research.txt`，因此會註冊 DLinear／LSTM／TCN／PatchTST adapters。API config 回傳的 availability 是當下 runtime 真相；資源受限 edge image 可明確 override 回輕量 requirements。
 
 目前 POST 是同步，適合受控本機實驗。當資料、trial、seed 與深度模型增加時應演進為 queue/background worker；在那之前，前端不能把尚未實作的排隊、取消或 resume 說成已有能力。
 
@@ -483,7 +483,7 @@ EdgeMind
 
 ### 9.3 Chat guardrails
 
-- 目前 Agent 對軌跡／過熱／多時域關鍵字採確定性路由，工具接收 `motor_id + training_motor_id + model_name + threshold_c + horizons_minutes`；像「40°C、5 到 60 分鐘」會原樣進入 ResearchService，而不是靜默改回預設值。工具執行並保存與 REST 相同的 pending-truth payload；正式版再支援只用 `forecast_id` 解釋既有結果。
+- 目前 Agent 對軌跡／過熱／多時域關鍵字採確定性路由，工具接收 `motor_id + training_motor_id + model_name + threshold_c + horizons_minutes`；像「40°C、5 到 60 分鐘」會原樣進入 ResearchService，而不是靜默改回預設值。後端完成歷史評估、重訓、推論、risk 與圖表後，Agent 以單一 success event 回傳確定性報告及附件；即時 pending truth 不會被誤稱為缺少模型誤差。
 - 回答必須提及 origin time、horizon、model version、risk level 與資料品質 warning。
 - Agent 不可把 validation 當 test，不可把 DEMO 指標描述為真實設備結果，不可把關聯說成因果。
 - 維護建議使用經核准模板；High risk 建議人工檢查／依 SOP 處理，不自行控制設備或保證故障。
@@ -569,12 +569,11 @@ gantt
     Versioned schema, quality, manifests      :a1, 2026-09-01, 14d
     Strict grid, split, window builder        :a2, after a1, 14d
     section Baselines
-    Persistence / snapshot / history Ridge    :b1, after a2, 10d
+    Direct / history Ridge                    :b1, after a2, 10d
     Walk-forward and reporting                :b2, after b1, 12d
     section Models
-    XGBoost adapter                           :c1, after b2, 7d
-    GRU / LSTM / TCN adapters                 :c2, after b2, 21d
-    DLinear / Transformer / PatchTST adapters :c3, after b2, 21d
+    LSTM / TCN adapters                       :c2, after b2, 21d
+    DLinear / PatchTST adapters               :c3, after b2, 21d
     section Product
     Trajectory + risk API                     :d1, after b1, 14d
     Forecast / quality frontend               :d2, after d1, 14d

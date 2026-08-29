@@ -19,22 +19,13 @@ import {
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useResearch } from '../hooks/useResearch.js';
+import {
+  FORECAST_MODELS,
+  FORECAST_MODEL_IDS,
+} from '../models/forecastModel.js';
 import './ResearchWorkspace.css';
 
 const FALLBACK_HORIZONS = [5, 10, 15, 20, 25, 30];
-const FALLBACK_MODELS = [
-  'Persistence',
-  'Ridge',
-  'Ridge + Historical',
-  'XGBoost',
-  'GRU',
-  'LSTM',
-  'TCN',
-  'DLinear',
-  'Transformer',
-  'PatchTST',
-];
-
 function firstDefined(...values) {
   return values.find((value) => value !== undefined && value !== null);
 }
@@ -89,15 +80,21 @@ function formatDurationMs(value) {
 
 function modelsFromConfig(config) {
   const candidates = config?.models || config?.available_models || config?.model_catalogue || config?.model_capabilities;
-  if (!candidates) return FALLBACK_MODELS;
+  if (!candidates) return FORECAST_MODELS.map((model) => model.label);
   if (!Array.isArray(candidates)) {
-    return Object.entries(candidates).map(([name, model]) => (
-      model?.display_name || model?.label || model?.name || name
-    ));
+    return Object.entries(candidates)
+      .filter(([name, model]) => FORECAST_MODEL_IDS.has(model?.name || model?.id || name))
+      .map(([name, model]) => model?.display_name || model?.label || model?.name || name);
   }
-  return candidates.map((model) => typeof model === 'string'
-    ? model
-    : model.display_name || model.label || model.name || model.id).filter(Boolean);
+  return candidates
+    .map((model) => typeof model === 'string'
+      ? FORECAST_MODELS.find((supported) => supported.id === model)
+      : {
+        id: model.name || model.id || model.model_name,
+        label: model.display_name || model.label || model.name || model.id,
+      })
+    .filter((model) => model?.id && FORECAST_MODEL_IDS.has(model.id))
+    .map((model) => model.label);
 }
 
 function forecastModelOptions(config) {
@@ -112,7 +109,9 @@ function forecastModelOptions(config) {
       label: model.display_name || model.label || model.name || model.id,
       status: model.status,
     };
-  }).filter((model) => model.id && model.status !== 'unavailable');
+  }).filter((model) => (
+    model.id && FORECAST_MODEL_IDS.has(model.id) && model.status !== 'unavailable'
+  ));
   return available.length
     ? available
     : [{ id: 'ridge_history_trend', label: 'Ridge + History/Trend' }];
@@ -153,7 +152,7 @@ function modelRows(report) {
       rmse: numberValue(overall.rmse, overall.rmse_c, overall.root_mean_squared_error),
       maxError: numberValue(overall.max_error, overall.max_error_c, overall.maximum_error),
       r2: numberValue(overall.r2, overall.r_squared, overall.r2_score),
-      skillVsPersistence: numberValue(test.skill_score_vs_persistence),
+      skillVsDirectRidge: numberValue(test.skill_score_vs_ridge_direct),
       targetStdDev: numberValue(test.target_distribution?.stddev_c),
       r2LowVarianceWarning: Boolean(test.target_distribution?.r2_low_variance_warning),
       crossDeviceMae: numberValue(crossOverall.mae, crossOverall.mae_c, crossOverall.mean_absolute_error),
@@ -738,12 +737,12 @@ function ModelComparison({ rows }) {
         <span className="metric-direction">MAE / RMSE / 延遲 ↓　R² ↑</span>
       </div>
       {lowVariance && (
-        <StatusAlert tone="info">測試真值標準差僅 {formatNumber(targetStdDev, 3)} °C；R² 的分母很小，因此小誤差也可能得到很大的負值。請優先同看 MAE 與相對 Persistence 技能分數，原始 R² 仍完整保留。</StatusAlert>
+        <StatusAlert tone="info">測試真值標準差僅 {formatNumber(targetStdDev, 3)} °C；R² 的分母很小，因此小誤差也可能得到很大的負值。請優先同看 MAE 與相對 Direct Ridge 技能分數，原始 R² 仍完整保留。</StatusAlert>
       )}
       <div className="table-scroll">
         <table className="research-table">
           <caption className="sr-only">各預測模型於保留測試集的準確度與推論成本比較</caption>
-          <thead><tr><th scope="col">模型</th><th scope="col">MAE °C</th><th scope="col">RMSE °C</th><th scope="col">Max error</th><th scope="col">R²</th><th scope="col">相對 Persistence</th><th scope="col">跨設備 MAE</th><th scope="col">推論延遲</th><th scope="col">訓練時間</th><th scope="col">模型大小</th></tr></thead>
+          <thead><tr><th scope="col">模型</th><th scope="col">MAE °C</th><th scope="col">RMSE °C</th><th scope="col">Max error</th><th scope="col">R²</th><th scope="col">相對 Direct Ridge</th><th scope="col">跨設備 MAE</th><th scope="col">推論延遲</th><th scope="col">訓練時間</th><th scope="col">模型大小</th></tr></thead>
           <tbody>
             {rows.map((row) => {
               const unavailable = ['unavailable', 'failed', 'error'].includes(row.status) && row.mae === null;
@@ -753,7 +752,7 @@ function ModelComparison({ rows }) {
                   <th scope="row"><span className="model-name">{row.name}</span>{selectedDuringDevelopment && <small className="best-value" title={`${row.selectionScope} MAE ${formatNumber(row.selectionMae, 3)}`}>開發期候選</small>}{unavailable && <small title={row.reason}>{row.status === 'unavailable' ? '環境未安裝' : '執行失敗'}</small>}</th>
                   {unavailable ? <td colSpan="9" className="unavailable-reason">{row.reason || '此模型目前不可用，未產生比較數值。'}</td> : <>
                     <td>{formatNumber(row.mae)}</td>
-                    <td>{formatNumber(row.rmse)}</td><td>{formatNumber(row.maxError)}</td><td>{formatNumber(row.r2, 3)}</td><td>{row.skillVsPersistence === null ? '—' : `${row.skillVsPersistence >= 0 ? '+' : ''}${formatNumber(row.skillVsPersistence * 100, 1)}%`}</td><td>{formatNumber(row.crossDeviceMae)}</td><td>{formatDurationMs(row.latencyMs)}</td><td>{formatDurationMs(row.trainingMs)}</td><td>{formatBytes(row.sizeBytes)}</td>
+                    <td>{formatNumber(row.rmse)}</td><td>{formatNumber(row.maxError)}</td><td>{formatNumber(row.r2, 3)}</td><td>{row.skillVsDirectRidge === null ? '—' : `${row.skillVsDirectRidge >= 0 ? '+' : ''}${formatNumber(row.skillVsDirectRidge * 100, 1)}%`}</td><td>{formatNumber(row.crossDeviceMae)}</td><td>{formatDurationMs(row.latencyMs)}</td><td>{formatDurationMs(row.trainingMs)}</td><td>{formatBytes(row.sizeBytes)}</td>
                   </>}
                 </tr>
               );
@@ -761,7 +760,7 @@ function ModelComparison({ rows }) {
           </tbody>
         </table>
       </div>
-      <p className="table-note">「開發期候選」只依 walk-forward／validation MAE；相對 Persistence 正值代表改善、負值代表退步。本表 test 與跨設備數值只用於凍結後報告，不反向選模。Unavailable 模型保留原因，不補虛構數值。</p>
+      <p className="table-note">「開發期候選」只依 walk-forward／validation MAE；相對 Direct Ridge 正值代表改善、負值代表退步。本表 test 與跨設備數值只用於凍結後報告，不反向選模。Unavailable 模型保留原因，不補虛構數值。</p>
     </section>
   );
 }
@@ -881,7 +880,7 @@ function MethodologyPanel({ report, form }) {
         <summary>查看實驗控制與解讀原則</summary>
         <div className="method-details">
           <p>{typeof method === 'string' ? method : method.description || '所有模型共用相同輸入視窗、預測目標與時間切分；測試集只用於最終一次評估。'}</p>
-          <ul><li>Persistence 與線性模型是必要 baseline，複雜模型需證明準確度增益。</li><li>消融實驗回答濕度、震動與歷史趨勢是否真正帶來貢獻。</li><li>若模型套件或資料條件不足，結果明確標記 unavailable，而非補入模擬分數。</li></ul>
+          <ul><li>Direct Ridge 是共同 baseline，較複雜模型需證明準確度增益。</li><li>消融實驗回答濕度、震動與歷史趨勢是否真正帶來貢獻。</li><li>若模型套件或資料條件不足，結果明確標記 unavailable，而非補入模擬分數。</li></ul>
         </div>
       </details>
     </section>

@@ -19,8 +19,11 @@ export default function App() {
     messages,
     input,
     isLoading,
+    selectedModel,
+    modelOptions,
     hasMessages,
     setInput,
+    setSelectedModel,
     sendMessage,
     stopResponse,
     newChat,
@@ -72,6 +75,9 @@ export default function App() {
                 onSend={sendMessage}
                 isLoading={isLoading}
                 onStop={stopResponse}
+                selectedModel={selectedModel}
+                modelOptions={modelOptions}
+                onModelChange={setSelectedModel}
               />
             </div>
           ) : (
@@ -88,6 +94,9 @@ export default function App() {
                 onSend={sendMessage}
                 isLoading={isLoading}
                 onStop={stopResponse}
+                selectedModel={selectedModel}
+                modelOptions={modelOptions}
+                onModelChange={setSelectedModel}
               />
             </>
           )}

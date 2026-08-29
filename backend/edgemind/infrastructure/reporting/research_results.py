@@ -10,6 +10,12 @@ from pathlib import Path
 import re
 from typing import Any, Iterable, Mapping
 
+from edgemind.infrastructure.reporting.artifacts import build_chart_attachments
+from edgemind.infrastructure.reporting.charts import (
+    write_bar_chart,
+    write_line_chart,
+)
+
 
 EXPERIMENT_ID_PATTERN = re.compile(r"[a-f0-9]{32}")
 BULKY_LEDGER_FIELDS = frozenset({"prediction_records", "split_manifest_records"})
@@ -300,6 +306,119 @@ def get_research_experiment(experiment_id: str, report_root: Path) -> dict | Non
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _create_research_forecast_charts(result: dict, directory: Path) -> list[str]:
+    """Render the pending live trajectory without implying observed truth."""
+    trajectory = [
+        point
+        for point in result.get("trajectory", [])
+        if isinstance(point, Mapping)
+        and isinstance(point.get("predicted_temperature_c"), (int, float))
+        and math.isfinite(float(point["predicted_temperature_c"]))
+    ]
+    values = [float(point["predicted_temperature_c"]) for point in trajectory]
+    labels = [
+        f'+{int(point.get("horizon_minutes", 0))} 分'
+        for point in trajectory
+    ]
+
+    current = (result.get("source") or {}).get("current_temperature_c")
+    if isinstance(current, (int, float)) and math.isfinite(float(current)):
+        values.insert(0, float(current))
+        labels.insert(0, "目前")
+
+    model = result.get("model") or {}
+    model_label = str(
+        model.get("display_name") or model.get("name") or "預測模型"
+    )
+    series: list[tuple[str, list[float], str]] = [
+        (model_label, values, "#2563eb"),
+    ]
+    threshold = (result.get("risk") or {}).get("threshold_c")
+    if (
+        values
+        and isinstance(threshold, (int, float))
+        and math.isfinite(float(threshold))
+    ):
+        series.append(("警戒門檻", [float(threshold)] * len(values), "#dc2626"))
+
+    chart_path = directory / "charts" / "01_temperature_trajectory.svg"
+    write_line_chart(
+        chart_path,
+        f'{result.get("motor_id") or "設備"}溫度預測軌跡',
+        series,
+        labels,
+        "溫度 (°C)",
+    )
+    charts = [str(chart_path)]
+
+    locked_test = (
+        (result.get("historical_evaluation") or {}).get("locked_test") or {}
+    )
+    latest = locked_test.get("latest_forecast") or {}
+    historical_trajectory = [
+        point
+        for point in latest.get("trajectory", [])
+        if isinstance(point, Mapping)
+        and isinstance(point.get("predicted_temperature_c"), (int, float))
+        and isinstance(point.get("actual_temperature_c"), (int, float))
+    ]
+    if historical_trajectory:
+        historical_chart = (
+            directory / "charts" / "02_historical_actual_vs_predicted.svg"
+        )
+        historical_labels = [
+            f'+{int(point.get("horizon_minutes", 0))} 分'
+            for point in historical_trajectory
+        ]
+        write_line_chart(
+            historical_chart,
+            f"{model_label} 歷史鎖定測試樣本",
+            [
+                (
+                    "實際溫度",
+                    [
+                        float(point["actual_temperature_c"])
+                        for point in historical_trajectory
+                    ],
+                    "#16a34a",
+                ),
+                (
+                    "預測溫度",
+                    [
+                        float(point["predicted_temperature_c"])
+                        for point in historical_trajectory
+                    ],
+                    "#2563eb",
+                ),
+            ],
+            historical_labels,
+            "溫度 (°C)",
+        )
+        charts.append(str(historical_chart))
+
+    by_horizon = locked_test.get("by_horizon") or {}
+    ordered_horizons = sorted(
+        (
+            (int(horizon), metrics)
+            for horizon, metrics in by_horizon.items()
+            if isinstance(metrics, Mapping)
+            and isinstance(metrics.get("mae"), (int, float))
+        ),
+        key=lambda item: item[0],
+    )
+    if ordered_horizons:
+        mae_chart = directory / "charts" / "03_historical_mae_by_horizon.svg"
+        write_bar_chart(
+            mae_chart,
+            f"{model_label} 歷史鎖定測試 MAE",
+            [f"+{horizon} 分" for horizon, _ in ordered_horizons],
+            [float(metrics["mae"]) for _, metrics in ordered_horizons],
+            "MAE (°C)",
+        )
+        charts.append(str(mae_chart))
+    return charts
+
+
 def save_research_forecast(result: dict, report_root: Path) -> dict:
     """Persist an immutable live forecast separately from offline experiments."""
     forecast_id = str(result.get("forecast_id", ""))
@@ -308,6 +427,7 @@ def save_research_forecast(result: dict, report_root: Path) -> dict:
     directory = report_root / "research_forecasts" / forecast_id
     directory.mkdir(parents=True, exist_ok=False)
     result_path = directory / "result.json"
+    charts = _create_research_forecast_charts(result, directory)
     enriched = _json_ready(
         {
             **result,
@@ -315,7 +435,9 @@ def save_research_forecast(result: dict, report_root: Path) -> dict:
                 **(result.get("artifacts") or {}),
                 "run_directory": str(directory),
                 "result_json": str(result_path),
+                "charts": charts,
             },
+            "attachments": build_chart_attachments(charts, report_root),
         }
     )
     temporary = result_path.with_suffix(".json.tmp")

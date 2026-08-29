@@ -100,13 +100,13 @@ class ResearchServiceTests(unittest.TestCase):
             config["constraints"]["minimum_pipeline_readings_formula"],
         )
         statuses = {item["name"]: item["status"] for item in config["models"]}
-        self.assertEqual(statuses["persistence"], "available")
+        self.assertEqual(statuses["ridge_direct"], "available")
         self.assertEqual(statuses["tcn"], "unavailable")
         self.assertEqual(
             set(config["defaults"]["model_names"]),
             {
-                "persistence", "ridge_direct", "ridge_history_trend", "xgboost",
-                "gru", "lstm", "tcn", "dlinear", "transformer", "patchtst",
+                "ridge_direct", "ridge_history_trend", "dlinear",
+                "lstm", "tcn", "patchtst",
             },
         )
 
@@ -115,14 +115,14 @@ class ResearchServiceTests(unittest.TestCase):
             self.uow,
             training_motor_id="REAL-A",
             evaluation_motor_id="REAL-B",
-            model_names=("persistence", "ridge_direct", "ridge_history_trend"),
+            model_names=("ridge_direct", "ridge_history_trend"),
             include_ablations=False,
         )
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(len(result["experiment_id"]), 32)
         self.assertEqual(set(result["models"]), {
-            "persistence", "ridge_direct", "ridge_history_trend"
+            "ridge_direct", "ridge_history_trend"
         })
         self.assertTrue(
             result["models"]["ridge_history_trend"]["cross_device"]["is_cross_device"]
@@ -145,7 +145,7 @@ class ResearchServiceTests(unittest.TestCase):
             uow,
             training_motor_id="MIXED",
             evaluation_motor_id=None,
-            model_names=("persistence",),
+            model_names=("ridge_direct",),
             include_ablations=False,
         )
 
@@ -156,6 +156,16 @@ class ResearchServiceTests(unittest.TestCase):
             "synthetic_or_demo",
         )
         self.assertNotEqual(_reading_hash(readings("MIXED")), _reading_hash(mixed))
+
+    def test_rejects_removed_research_models(self):
+        with self.assertRaisesRegex(ResearchError, "unsupported model_names"):
+            self.service.run(
+                self.uow,
+                training_motor_id="REAL-A",
+                evaluation_motor_id=None,
+                model_names=("xgboost",),
+                include_ablations=False,
+            )
 
     def test_forecasts_latest_pending_trajectory_without_future_truth(self):
         result = self.service.forecast_trajectory(
@@ -175,6 +185,20 @@ class ResearchServiceTests(unittest.TestCase):
         self.assertTrue(
             all(point["truth_status"] == "pending" for point in result["trajectory"])
         )
+        historical = result["historical_evaluation"]
+        self.assertEqual(historical["status"], "completed")
+        self.assertEqual(
+            historical["locked_test"]["truth_status"],
+            "observed",
+        )
+        self.assertGreater(
+            historical["locked_test"]["overall"]["sample_count"],
+            0,
+        )
+        self.assertIsNotNone(
+            historical["locked_test"]["overall"]["mae"]
+        )
+        self.assertFalse(historical["locked_test_used_for_selection"])
         self.assertIn(result["risk"]["risk_level"], {"low", "medium", "high"})
         self.assertTrue(
             result["leakage_audit"][

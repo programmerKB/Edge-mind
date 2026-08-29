@@ -12,7 +12,6 @@ from edgemind.domain.research import (
     DirectRidgeModel,
     HistoryTrendRidgeModel,
     ModelRegistry,
-    PersistenceModel,
     ResearchConfig,
     ResearchError,
     SequenceExample,
@@ -314,18 +313,6 @@ class ExecutableBaselineTests(unittest.TestCase):
             make_manual_example(index, self.config) for index in range(80)
         )
 
-    def test_persistence_repeats_the_anchor_temperature(self):
-        model = PersistenceModel(self.config)
-        model.fit(self.examples[:20])
-
-        prediction = model.predict(self.examples[20])
-
-        self.assertEqual(len(prediction), 6)
-        self.assertTrue(
-            all(value == self.examples[20].current_temperature for value in prediction)
-        )
-        self.assertEqual(model.parameter_count(), 0)
-
     def test_direct_ridge_is_multioutput_and_uses_training_statistics_only(self):
         model = DirectRidgeModel(self.config, ("temperature",))
         model.fit(self.examples[:50])
@@ -483,20 +470,29 @@ class RegistryAndExperimentTests(unittest.TestCase):
     def test_optional_models_are_explicitly_unavailable_not_fabricated(self):
         registry = build_default_registry()
 
-        self.assertEqual(registry.availability("persistence")["status"], "available")
-        for name in (
-            "xgboost", "gru", "lstm", "tcn", "dlinear", "transformer", "patchtst",
-        ):
+        self.assertEqual(
+            {item["name"] for item in registry.describe()},
+            {
+                "ridge_direct", "ridge_history_trend", "dlinear",
+                "lstm", "tcn", "patchtst",
+            },
+        )
+        for name in ("dlinear", "lstm", "tcn", "patchtst"):
             availability = registry.availability(name)
             self.assertEqual(availability["status"], "unavailable")
             self.assertIn("adapter", availability["reason"])
             self.assertNotIn("metrics", availability)
+        for removed_name in ("persistence", "xgboost", "gru", "transformer"):
+            self.assertEqual(
+                registry.availability(removed_name)["reason"],
+                "model is not registered",
+            )
 
     def test_registry_accepts_an_outward_adapter_factory(self):
         registry = ModelRegistry()
         registry.register(
             "external",
-            lambda config, features: PersistenceModel(config, features),
+            lambda config, features: DirectRidgeModel(config, features),
             display_name="External",
             description="Test adapter",
         )
@@ -505,7 +501,7 @@ class RegistryAndExperimentTests(unittest.TestCase):
         with self.assertRaises(ResearchError):
             registry.register(
                 "external",
-                lambda config, features: PersistenceModel(config, features),
+                lambda config, features: DirectRidgeModel(config, features),
                 display_name="Duplicate",
                 description="Duplicate",
             )
@@ -525,10 +521,9 @@ class RegistryAndExperimentTests(unittest.TestCase):
             evaluation,
             config=config,
             model_names=(
-                "persistence",
                 "ridge_direct",
                 "ridge_history_trend",
-                "xgboost",
+                "dlinear",
                 "lstm",
             ),
             include_ablations=False,
@@ -555,7 +550,7 @@ class RegistryAndExperimentTests(unittest.TestCase):
                 datetime.fromisoformat(fold["test"]["last_target_time"]),
                 locked_test_anchor,
             )
-        for name in ("persistence", "ridge_direct", "ridge_history_trend"):
+        for name in ("ridge_direct", "ridge_history_trend"):
             model = result["models"][name]
             self.assertEqual(model["status"], "available")
             self.assertEqual(model["walk_forward"]["fold_count"], 2)
@@ -601,7 +596,7 @@ class RegistryAndExperimentTests(unittest.TestCase):
                     for fold in model["walk_forward"]["folds"]
                 )
             )
-            self.assertIn("skill_score_vs_persistence", model["test"])
+            self.assertIn("skill_score_vs_ridge_direct", model["test"])
             self.assertFalse(model["training"]["locked_test_used_for_selection"])
         split_records = result["dataset"]["split_manifest_records"]
         self.assertEqual(
@@ -613,17 +608,13 @@ class RegistryAndExperimentTests(unittest.TestCase):
             {record["split"] for record in split_records},
             {"train", "validation", "test", "purged_gap", "external_test"},
         )
-        self.assertEqual(result["models"]["xgboost"]["status"], "unavailable")
+        self.assertEqual(result["models"]["dlinear"]["status"], "unavailable")
         self.assertEqual(result["models"]["lstm"]["status"], "unavailable")
         comparisons = {
             item["candidate_model"]: item
             for item in result["statistical_comparisons"]
             if item.get("candidate_model")
         }
-        self.assertEqual(
-            comparisons["ridge_direct"]["status"],
-            "insufficient_blocks",
-        )
         self.assertEqual(
             comparisons["ridge_history_trend"]["block_definition"],
             "device_id_x_origin_utc_date",
@@ -634,7 +625,7 @@ class RegistryAndExperimentTests(unittest.TestCase):
 
         class SpyAdapter:
             feature_names = BASE_FEATURE_NAMES
-            representation = "spy_persistence"
+            representation = "spy_direct_forecast"
 
             def __init__(self, config, _features):
                 self.config = config

@@ -53,18 +53,18 @@ BASE_FEATURE_NAMES = (
 DEFAULT_HORIZONS_MINUTES = (5, 10, 15, 20, 25, 30)
 MAX_HORIZON_MINUTES = 60
 DEFAULT_MODEL_NAMES = (
-    "persistence",
     "ridge_direct",
     "ridge_history_trend",
+    "dlinear",
+    "lstm",
+    "tcn",
+    "patchtst",
 )
 DEFAULT_RIDGE_ALPHA_CANDIDATES = (0.0001, 0.001, 0.01, 0.1, 1.0, 10.0)
 OPTIONAL_MODEL_NAMES = (
-    "xgboost",
-    "gru",
+    "dlinear",
     "lstm",
     "tcn",
-    "dlinear",
-    "transformer",
     "patchtst",
 )
 UNKNOWN_DEVICE_ID = "UNKNOWN"
@@ -903,34 +903,6 @@ def _feature_indexes(feature_names: Sequence[str]) -> tuple[int, ...]:
     return tuple(BASE_FEATURE_NAMES.index(name) for name in names)
 
 
-class PersistenceModel:
-    name = "persistence"
-    display_name = "Persistence"
-    representation = "last_temperature_repeated"
-    feature_names = ("temperature",)
-
-    def __init__(self, config: ResearchConfig, _feature_names: Sequence[str] = ()):
-        self.config = config
-
-    def fit(self, examples: Sequence[SequenceExample]) -> None:
-        if not examples:
-            raise ResearchError("persistence requires at least one training sequence")
-
-    def predict(self, example: SequenceExample) -> tuple[float, ...]:
-        return tuple(
-            example.current_temperature for _ in self.config.horizons_minutes
-        )
-
-    def state_dict(self) -> dict[str, Any]:
-        return {
-            "algorithm": self.name,
-            "horizons_minutes": list(self.config.horizons_minutes),
-        }
-
-    def parameter_count(self) -> int:
-        return 0
-
-
 class DirectRidgeModel:
     name = "ridge_direct"
     display_name = "Direct Ridge"
@@ -1656,12 +1628,6 @@ class ModelRegistry:
 def build_default_registry() -> ModelRegistry:
     registry = ModelRegistry()
     registry.register(
-        "persistence",
-        lambda config, features: PersistenceModel(config, features),
-        display_name="Persistence",
-        description="Repeats the latest observed temperature at every horizon.",
-    )
-    registry.register(
         "ridge_direct",
         lambda config, features: DirectRidgeModel(config, features),
         display_name="Direct Ridge",
@@ -1674,12 +1640,9 @@ def build_default_registry() -> ModelRegistry:
         description="Direct multi-horizon Ridge over history, summaries, and slopes.",
     )
     optional = {
-        "xgboost": ("XGBoost", ("xgboost",)),
-        "gru": ("GRU", ("torch",)),
+        "dlinear": ("DLinear", ("torch",)),
         "lstm": ("LSTM", ("torch",)),
         "tcn": ("TCN", ("torch",)),
-        "dlinear": ("DLinear", ("torch",)),
-        "transformer": ("Transformer", ("torch",)),
         "patchtst": ("PatchTST", ("torch",)),
     }
     for name, (display_name, dependencies) in optional.items():
@@ -1957,9 +1920,9 @@ def _paired_model_statistics(
     models: Mapping[str, Mapping[str, Any]],
     config: ResearchConfig,
 ) -> list[dict[str, Any]]:
-    """Compare each locked-test candidate with Persistence by paired day."""
+    """Compare each locked-test candidate with Direct Ridge by paired day."""
 
-    reference = models.get("persistence")
+    reference = models.get("ridge_direct")
     reference_records = (
         reference.get("test", {}).get("prediction_records")
         if isinstance(reference, Mapping)
@@ -1968,22 +1931,22 @@ def _paired_model_statistics(
     if not isinstance(reference_records, list):
         return [
             {
-                "comparison": "candidate_vs_persistence",
+                "comparison": "candidate_vs_ridge_direct",
                 "status": "unavailable",
-                "reason": "persistence locked-test prediction ledger is unavailable",
+                "reason": "Direct Ridge locked-test prediction ledger is unavailable",
             }
         ]
     reference_blocks = _block_mae(reference_records)
     results: list[dict[str, Any]] = []
     for model_name, model in sorted(models.items()):
-        if model_name == "persistence" or not isinstance(model, Mapping):
+        if model_name == "ridge_direct" or not isinstance(model, Mapping):
             continue
         records = model.get("test", {}).get("prediction_records")
         if not isinstance(records, list):
             results.append(
                 {
-                    "comparison": f"{model_name}_vs_persistence",
-                    "reference_model": "persistence",
+                    "comparison": f"{model_name}_vs_ridge_direct",
+                    "reference_model": "ridge_direct",
                     "candidate_model": model_name,
                     "status": "unavailable",
                     "reason": model.get("reason") or "locked-test ledger unavailable",
@@ -1998,8 +1961,8 @@ def _paired_model_statistics(
         )
         results.append(
             {
-                "comparison": f"{model_name}_vs_persistence",
-                "reference_model": "persistence",
+                "comparison": f"{model_name}_vs_ridge_direct",
+                "reference_model": "ridge_direct",
                 "candidate_model": model_name,
                 "block_definition": "device_id_x_origin_utc_date",
                 **statistics,
@@ -2008,9 +1971,9 @@ def _paired_model_statistics(
     return results
 
 
-def _attach_persistence_skill(models: Mapping[str, Any]) -> None:
+def _attach_direct_ridge_skill(models: Mapping[str, Any]) -> None:
     """Add an interpretable score without changing or suppressing raw metrics."""
-    reference = models.get("persistence")
+    reference = models.get("ridge_direct")
     if not isinstance(reference, Mapping):
         return
     for scope in ("validation", "test", "cross_device"):
@@ -2028,7 +1991,7 @@ def _attach_persistence_skill(models: Mapping[str, Any]) -> None:
                 continue
             candidate_mae = evaluation.get("overall", {}).get("mae")
             if isinstance(candidate_mae, (int, float)):
-                evaluation["skill_score_vs_persistence"] = (
+                evaluation["skill_score_vs_ridge_direct"] = (
                     1.0 - float(candidate_mae) / float(reference_mae)
                 )
 
@@ -2201,7 +2164,7 @@ def run_research_experiment(
                 "error_type": type(error).__name__,
             }
 
-    _attach_persistence_skill(model_results)
+    _attach_direct_ridge_skill(model_results)
     statistical_comparisons = _paired_model_statistics(model_results, config)
     return {
         "schema_version": 2,
@@ -2288,7 +2251,6 @@ __all__ = [
     "InferenceSequence",
     "ModelRegistry",
     "OPTIONAL_MODEL_NAMES",
-    "PersistenceModel",
     "ResearchConfig",
     "ResearchError",
     "RiskForecast",
