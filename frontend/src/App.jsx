@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Composer from './components/Composer.jsx';
 import MessageList from './components/MessageList.jsx';
+import ResearchWorkspace from './components/ResearchWorkspace.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import Topbar from './components/Topbar.jsx';
 import Welcome from './components/Welcome.jsx';
@@ -12,6 +13,7 @@ import './App.css';
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [activeView, setActiveView] = useState('chat');
   const messagesEndRef = useRef(null);
   const {
     messages,
@@ -33,6 +35,12 @@ export default function App() {
 
   const startNewChat = () => {
     newChat();
+    setActiveView('chat');
+    setSidebarOpen(false);
+  };
+
+  const navigate = (view) => {
+    setActiveView(view);
     setSidebarOpen(false);
   };
 
@@ -44,39 +52,47 @@ export default function App() {
         onClose={() => setSidebarOpen(false)}
         onToggle={() => setSidebarCollapsed((value) => !value)}
         onNewChat={startNewChat}
+        onNavigate={navigate}
+        activeView={activeView}
         hasMessages={hasMessages}
       />
       <main className="main-panel">
-        <Topbar onOpenMenu={() => setSidebarOpen(true)} />
+        <Topbar
+          activeView={activeView}
+          onOpenMenu={() => setSidebarOpen(true)}
+        />
 
-        {!hasMessages ? (
-          <div className="empty-state">
-            <Welcome onSuggestion={sendMessage} />
-            <Composer
-              value={input}
-              onChange={setInput}
-              onSend={sendMessage}
-              isLoading={isLoading}
-              onStop={stopResponse}
-            />
-          </div>
-        ) : (
-          <>
-            <MessageList
-              messages={messages}
-              endRef={messagesEndRef}
-              onRetry={retryLastMessage}
-            />
-            <Composer
-              compact
-              value={input}
-              onChange={setInput}
-              onSend={sendMessage}
-              isLoading={isLoading}
-              onStop={stopResponse}
-            />
-          </>
-        )}
+        <section className="chat-workspace" hidden={activeView !== 'chat'} aria-label="設備診斷對話">
+          {!hasMessages ? (
+            <div className="empty-state">
+              <Welcome onSuggestion={sendMessage} />
+              <Composer
+                value={input}
+                onChange={setInput}
+                onSend={sendMessage}
+                isLoading={isLoading}
+                onStop={stopResponse}
+              />
+            </div>
+          ) : (
+            <>
+              <MessageList
+                messages={messages}
+                endRef={messagesEndRef}
+                onRetry={retryLastMessage}
+              />
+              <Composer
+                compact
+                value={input}
+                onChange={setInput}
+                onSend={sendMessage}
+                isLoading={isLoading}
+                onStop={stopResponse}
+              />
+            </>
+          )}
+        </section>
+        <ResearchWorkspace active={activeView === 'research'} />
       </main>
     </div>
   );

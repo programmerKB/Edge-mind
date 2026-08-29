@@ -1,0 +1,137 @@
+"""Agent routing tests for current multi-horizon temperature risk forecasts."""
+
+import unittest
+
+from edgemind.application.agent import AgentService
+from edgemind.application.diagnostics import DiagnosticToolService
+
+
+class FakeModel:
+    async def decide(self, _message):
+        raise AssertionError("deterministic trajectory intent should skip model routing")
+
+    async def summarize(self, _message, tool_results):
+        return f"grounded:{tool_results[0]['name']}"
+
+    async def close(self):
+        return None
+
+
+class FakeTools:
+    def __init__(self):
+        self.calls = []
+
+    def execute(self, name, arguments):
+        self.calls.append((name, arguments))
+        return {
+            "motor_id": arguments["motor_id"],
+            "trajectory": [{"horizon_minutes": 5, "predicted_temperature_c": 32.0}],
+            "risk": {"risk_level": "low"},
+        }
+
+
+class FakeUnitOfWork:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return None
+
+
+class FakeResearchService:
+    def __init__(self):
+        self.arguments = None
+
+    def forecast_trajectory(self, _uow, **arguments):
+        self.arguments = arguments
+        return {
+            "forecast_id": "f" * 32,
+            "motor_id": arguments["motor_id"],
+            "truth_status": "pending",
+            "trajectory": [],
+        }
+
+
+class AgentTrajectoryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_routes_risk_prompt_to_trajectory_tool(self):
+        tools = FakeTools()
+        agent = AgentService(FakeModel(), tools)
+
+        events = [
+            event
+            async for event in agent.stream(
+                "請使用 DEMO-1 訓練的模型，預測 DEMO-2 未來溫度軌跡與過熱風險"
+            )
+        ]
+
+        self.assertEqual(
+            tools.calls,
+            [
+                (
+                    "get_temperature_trajectory_forecast",
+                    {"motor_id": "DEMO-2", "training_motor_id": "DEMO-1"},
+                )
+            ],
+        )
+        self.assertEqual(events[-1].status, "success")
+        self.assertIn("get_temperature_trajectory_forecast", events[-1].content)
+
+    async def test_diagnostic_tool_executes_research_forecast_use_case(self):
+        research = FakeResearchService()
+        tools = DiagnosticToolService(
+            FakeUnitOfWork,
+            forecasts=object(),
+            research=research,
+            sensors=object(),
+        )
+
+        payload = tools.execute(
+            "get_temperature_trajectory_forecast",
+            {
+                "motor_id": "DEMO-2",
+                "training_motor_id": "DEMO-1",
+                "model_name": "ridge_history_trend",
+                "threshold_c": 40.0,
+                "horizons_minutes": list(range(5, 61, 5)),
+            },
+        )
+
+        self.assertEqual(payload["truth_status"], "pending")
+        self.assertGreaterEqual(payload["tool_duration_ms"], 0)
+        self.assertEqual(
+            research.arguments,
+            {
+                "motor_id": "DEMO-2",
+                "training_motor_id": "DEMO-1",
+                "model_name": "ridge_history_trend",
+                "threshold_c": 40.0,
+                "horizons_minutes": list(range(5, 61, 5)),
+            },
+        )
+
+    async def test_agent_preserves_custom_risk_contract(self):
+        tools = FakeTools()
+        agent = AgentService(FakeModel(), tools)
+
+        async for _event in agent.stream(
+            "用 40°C 警戒值預測馬達 M1 未來 5 到 60 分鐘風險"
+        ):
+            pass
+
+        self.assertEqual(
+            tools.calls,
+            [
+                (
+                    "get_temperature_trajectory_forecast",
+                    {
+                        "motor_id": "M1",
+                        "threshold_c": 40.0,
+                        "horizons_minutes": list(range(5, 61, 5)),
+                    },
+                )
+            ],
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

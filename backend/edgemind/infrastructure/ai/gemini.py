@@ -60,6 +60,7 @@ class GeminiModelGateway:
                 tools=[
                     self._tools.get_motor_status,
                     self._tools.get_temperature_forecast,
+                    self._tools.get_temperature_trajectory_forecast,
                 ],
                 temperature=0.2,
             ),

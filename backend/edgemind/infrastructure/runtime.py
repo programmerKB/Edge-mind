@@ -8,6 +8,7 @@ from edgemind.application.agent import AgentService
 from edgemind.domain.demo_data import (
     DEMO_INFERENCE_MOTOR_ID,
     DEMO_INFERENCE_READING_COUNT,
+    DEMO_READING_COUNT,
     DEMO_TRAINING_MOTOR_ID,
     build_demo_inference_readings,
     build_demo_readings,
@@ -54,22 +55,35 @@ def _seed_baseline_devices(db) -> None:
 
 def _seed_demo_history(db) -> None:
     """Create deterministic training and inference histories idempotently."""
-    training_exists = (
-        db.query(MotorSensorData.id)
-        .filter(MotorSensorData.motor_id == DEMO_TRAINING_MOTOR_ID)
-        .first()
-        is not None
+    training_query = db.query(MotorSensorData).filter(
+        MotorSensorData.motor_id == DEMO_TRAINING_MOTOR_ID,
+        MotorSensorData.status.like("demo%"),
     )
-    if not training_exists:
+    training_current = training_query.filter(
+        MotorSensorData.status.like("demo-v2-training-%")
+    ).count()
+    if (
+        training_current != DEMO_READING_COUNT
+        or training_query.count() != DEMO_READING_COUNT
+    ):
+        # Upgrade old 36-row generated fixtures without touching real rows that
+        # happen to reuse the same motor identifier.
+        training_query.delete(synchronize_session=False)
         db.add_all(
             MotorSensorData(**reading) for reading in build_demo_readings()
         )
 
     inference_query = db.query(MotorSensorData).filter(
         MotorSensorData.motor_id == DEMO_INFERENCE_MOTOR_ID,
-        MotorSensorData.status == "demo-inference",
+        MotorSensorData.status.like("demo%"),
     )
-    if inference_query.count() != DEMO_INFERENCE_READING_COUNT:
+    inference_current = inference_query.filter(
+        MotorSensorData.status.like("demo-v2-inference-%")
+    ).count()
+    if (
+        inference_current != DEMO_INFERENCE_READING_COUNT
+        or inference_query.count() != DEMO_INFERENCE_READING_COUNT
+    ):
         # Replace only generated demo rows; real rows using the same motor ID are
         # deliberately left untouched.
         inference_query.delete(synchronize_session=False)

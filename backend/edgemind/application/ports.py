@@ -23,6 +23,10 @@ class SensorRepository(Protocol):
         """Stage one new sensor reading and return generated fields."""
         ...
 
+    def list_device_summaries(self) -> list[dict]:
+        """Return research-facing availability metadata for every device."""
+        ...
+
 
 class ForecastModelRepository(Protocol):
     """Persistence operations for serialized forecast model payloads."""
@@ -83,6 +87,26 @@ class ForecastReportGateway(Protocol):
         ...
 
 
+class ResearchResultGateway(Protocol):
+    """Persist reproducible research configurations and numerical results."""
+
+    def save_research_experiment(self, result: dict) -> dict:
+        """Write one completed experiment and return it with artifact paths."""
+        ...
+
+    def get_research_experiment(self, experiment_id: str) -> dict | None:
+        """Load one previously completed experiment by its opaque identifier."""
+        ...
+
+    def save_research_forecast(self, result: dict) -> dict:
+        """Persist one live trajectory forecast with pending future truth."""
+        ...
+
+    def get_research_forecast(self, forecast_id: str) -> dict | None:
+        """Load one previously persisted live trajectory forecast."""
+        ...
+
+
 class ReportQueryGateway(Protocol):
     """Read-only access used by report presentation endpoints."""
 
@@ -128,4 +152,15 @@ class DiagnosticTools(Protocol):
         training_motor_id: str | None = None,
     ) -> str:
         """Expose a typed forecast function schema for the model gateway."""
+        ...
+
+    def get_temperature_trajectory_forecast(
+        self,
+        motor_id: str,
+        training_motor_id: str | None = None,
+        model_name: str = "ridge_history_trend",
+        threshold_c: float = 35.0,
+        horizons_minutes: Sequence[int] = (5, 10, 15, 20, 25, 30),
+    ) -> str:
+        """Expose the latest multi-horizon trajectory/risk forecast tool."""
         ...

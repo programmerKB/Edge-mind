@@ -1,6 +1,7 @@
 /** @file Responsive navigation and current-session summary. */
 
 import {
+  FlaskConical,
   MessageSquareText,
   PanelLeftClose,
   PanelLeftOpen,
@@ -17,6 +18,8 @@ export default function Sidebar({
   onClose,
   onToggle,
   onNewChat,
+  onNavigate,
+  activeView,
   hasMessages,
 }) {
   return (
@@ -57,18 +60,27 @@ export default function Sidebar({
           <Plus size={18} />
           {!collapsed && <span>開始新診斷</span>}
         </button>
-        <div className="sidebar-section">
-          {!collapsed && <p className="sidebar-label">最近紀錄</p>}
+        <nav className="sidebar-section" aria-label="主要功能">
+          {!collapsed && <p className="sidebar-label">工作區</p>}
           <button
-            className={`history-item ${hasMessages ? 'active' : ''}`}
-            onClick={onClose}
+            className={`history-item ${activeView === 'chat' ? 'active' : ''}`}
+            onClick={() => onNavigate('chat')}
+            aria-current={activeView === 'chat' ? 'page' : undefined}
           >
             <MessageSquareText size={18} />
             {!collapsed && (
-              <span>{hasMessages ? '目前的設備診斷' : '尚無診斷紀錄'}</span>
+              <span>{hasMessages ? '目前的設備診斷' : '設備診斷'}</span>
             )}
           </button>
-        </div>
+          <button
+            className={`history-item ${activeView === 'research' ? 'active' : ''}`}
+            onClick={() => onNavigate('research')}
+            aria-current={activeView === 'research' ? 'page' : undefined}
+          >
+            <FlaskConical size={18} />
+            {!collapsed && <span>研究工作台</span>}
+          </button>
+        </nav>
         <div className="sidebar-footer">
           <div className="system-status">
             <span className="status-dot" />
