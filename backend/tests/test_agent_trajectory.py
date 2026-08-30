@@ -52,6 +52,11 @@ class FakeTools:
         }
 
 
+class FailingTools:
+    def execute(self, _name, _arguments):
+        return {"error": "感測資料未對齊 UTC 格點"}
+
+
 class FakeUnitOfWork:
     def __enter__(self):
         return self
@@ -133,6 +138,20 @@ class AgentTrajectoryTests(unittest.IsolatedAsyncioTestCase):
                 "horizons_minutes": list(range(5, 61, 5)),
             },
         )
+
+    async def test_tool_failure_is_returned_as_error_without_generated_summary(self):
+        agent = AgentService(FakeModel(), FailingTools())
+
+        events = [
+            event
+            async for event in agent.stream(
+                "請預測馬達 M1 未來 5 到 30 分鐘的溫度軌跡"
+            )
+        ]
+
+        self.assertEqual(events[-1].status, "error")
+        self.assertEqual(events[-1].content, "感測資料未對齊 UTC 格點")
+        self.assertNotIn("success", {event.status for event in events})
 
     async def test_agent_preserves_custom_risk_contract(self):
         tools = FakeTools()
