@@ -14,6 +14,20 @@ DEMO_MOTOR_ID = DEMO_TRAINING_MOTOR_ID
 DEMO_READING_COUNT = 2_016
 DEMO_INFERENCE_READING_COUNT = 2_016
 DEMO_INTERVAL_MINUTES = 5
+DEMO_TRAINING_STATUS_PREFIX = "demo-v3-training"
+DEMO_INFERENCE_STATUS_PREFIX = "demo-v3-inference"
+
+
+def _utc_grid_floor(value: datetime) -> datetime:
+    """Floor a reference time to the demo sampling grid in UTC."""
+    if value.tzinfo is None or value.utcoffset() is None:
+        value = value.replace(tzinfo=timezone.utc)
+    utc_value = value.astimezone(timezone.utc)
+    interval_seconds = DEMO_INTERVAL_MINUTES * 60
+    aligned_timestamp = (
+        int(utc_value.timestamp()) // interval_seconds * interval_seconds
+    )
+    return datetime.fromtimestamp(aligned_timestamp, tz=timezone.utc)
 
 
 def _build_demo_series(
@@ -29,10 +43,11 @@ def _build_demo_series(
     status_prefix: str,
 ) -> list[dict]:
     """Generate deterministic nonstationary operating histories for UI demos."""
-    end_time = reference_time or datetime.now(timezone.utc)
-    if end_time.tzinfo is None:
-        end_time = end_time.replace(tzinfo=timezone.utc)
-    end_time = end_time.replace(second=0, microsecond=0)
+    # Research datasets require exact UTC sampling-grid timestamps.  Merely
+    # removing seconds leaves a series generated at (for example) :03/:08 on
+    # the wrong phase and causes every row to be rejected by the strict
+    # sequence builder.
+    end_time = _utc_grid_floor(reference_time or datetime.now(timezone.utc))
     start_time = end_time - timedelta(minutes=(count - 1) * DEMO_INTERVAL_MINUTES)
     samples_per_day = 24 * 60 // DEMO_INTERVAL_MINUTES
     rng = random.Random(seed)
@@ -116,7 +131,7 @@ def build_demo_readings(reference_time: datetime | None = None) -> list[dict]:
         thermal_gain=13.2,
         cooling_rate=0.074,
         phase_shift=0.0,
-        status_prefix="demo-v2-training",
+        status_prefix=DEMO_TRAINING_STATUS_PREFIX,
     )
 
 
@@ -139,5 +154,5 @@ def build_demo_inference_readings(
         thermal_gain=13.9,
         cooling_rate=0.067,
         phase_shift=0.45,
-        status_prefix="demo-v2-inference",
+        status_prefix=DEMO_INFERENCE_STATUS_PREFIX,
     )

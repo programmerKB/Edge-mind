@@ -111,6 +111,13 @@ class AgentService:
                     call.name,
                     call.arguments,
                 )
+                if payload.get("error"):
+                    # A tool failure is a terminal Agent failure, not source
+                    # material for a generative "success" summary.  Returning
+                    # the grounded error also lets the client render the right
+                    # status and avoids fabricated fallback recommendations.
+                    yield AgentEvent("error", str(payload["error"]))
+                    return
                 attachments = [
                     item
                     for item in payload.get("attachments", [])
