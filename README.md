@@ -222,29 +222,51 @@ docker compose up -d backend frontend
 ## 系統架構
 
 ```mermaid
-flowchart LR
-    UI[React 診斷聊天 / 研究工作台] -->|SSE / REST| P[Presentation]
-    P --> A[Application Use Cases]
-    A --> D[Domain: Legacy Forecast + Research Engine]
-    I[Infrastructure Adapters] -. implements ports .-> A
-    I --> DB[(PostgreSQL)]
-    I --> G[Gemini]
-    I --> ML[PyTorch optional adapters]
-    I --> FS[CSV / SVG / Research JSON]
-    B[Bootstrap] --> P
-    B --> A
-    B --> I
+flowchart TB
+    subgraph FLOW[" "]
+        direction LR
+        subgraph INPUTS[" "]
+            direction TB
+            USER("使用者<br/>輸入問題 · 查看結果")
+            SENSOR("感測設備<br/>溫度 · 濕度 · XYZ 加速度")
+        end
+
+        WEB("React 前端<br/>聊天畫面 · 研究工作台")
+        API("FastAPI 後端<br/>接收請求 → 安排工作 → 執行核心邏輯")
+
+        USER -->|操作| WEB
+        SENSOR -->|寫入感測資料| API
+        WEB <-->|REST / SSE| API
+    end
+
+    subgraph SERVICES["後端依需求使用"]
+        direction LR
+        DB[("PostgreSQL<br/>保存感測資料與模型")]
+        MODEL("預測模型<br/>預測未來溫度與規則式風險")
+        GEMINI("Gemini<br/>理解一般問題 · 整理回答")
+        REPORT("研究報表<br/>CSV · SVG · JSON")
+    end
+
+    API -->|儲存 / 查詢| DB
+    API -->|訓練 / 推論| MODEL
+    API -->|工具呼叫 / 摘要| GEMINI
+    API -->|產生 / 讀取| REPORT
+
+    classDef source fill:#f1f1f1,stroke:#d9d9d9,color:#222,stroke-width:1px;
+    classDef frontend fill:#deedff,stroke:#bdd7f4,color:#1f2937,stroke-width:1px;
+    classDef backend fill:#ffeadb,stroke:#f2ccb1,color:#2b211b,stroke-width:1px;
+    classDef resource fill:#e5f4e9,stroke:#c6e5ce,color:#1f2b22,stroke-width:1px;
+
+    class USER,SENSOR source;
+    class WEB frontend;
+    class API backend;
+    class DB,MODEL,GEMINI,REPORT resource;
+    style FLOW fill:transparent,stroke:transparent
+    style INPUTS fill:transparent,stroke:transparent
+    style SERVICES fill:transparent,stroke:transparent,color:#666
 ```
 
-後端不是只依資料夾分類，而是以 application-owned ports 保持單向依賴：
-
-```text
-presentation ─→ application ─→ domain
-                       ↑
-infrastructure ────────┘
-
-bootstrap 是唯一可以同時組裝所有層的 composition root
-```
+圖中呈現使用者與設備資料如何進入系統，以及 FastAPI 執行工作時會使用哪些外部資源。FastAPI 盒內仍依 `presentation → application → domain` 執行；Application 只認識自己定義的 ports，具體的 PostgreSQL、Gemini、模型與報表 adapter 位於 Infrastructure。Bootstrap 是唯一可同時看見並組裝所有層的 composition root。
 
 | 分層 | 責任 | 禁止事項 |
 | --- | --- | --- |
