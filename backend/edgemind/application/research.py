@@ -158,9 +158,10 @@ class ResearchService:
                 "default_60min_history_30min_horizon_count_precheck"
             )
             summary["runtime_quality_audit_required"] = True
+            summary["eligibility_basis"] = "complete_reading_count_only"
             summary["study_eligible"] = count >= 2_016
             summary["study_eligibility_reason"] = (
-                "至少七天的五分鐘資料，可開始探索性研究"
+                "筆數達七天理論格點量；仍須通過 cadence、期間、事件與來源稽核"
                 if summary["study_eligible"]
                 else "資料少於七天（2,016 筆），僅建議流程驗證"
             )
@@ -214,7 +215,7 @@ class ResearchService:
             "warnings": [
                 "DEMO 與 RESEARCH 合成資料只驗證流程，不代表真實設備效能。",
                 "正式結論必須使用預先登記、具設備/工況來源的長期真實資料。",
-                "所有模型使用完全相同的時間分割、gap、horizon 與特徵消融規則。",
+                "候選模型共用 sample IDs、時間分割、gap 與 horizons；Direct Ridge 是只看當下單點的資訊受限 baseline。",
                 "模型只可用 development validation 選超參數；locked test 不參與調參。",
                 "低變異 holdout 的 R² 可能非常負，須與 MAE 及 Direct Ridge skill 一起解讀。",
             ],

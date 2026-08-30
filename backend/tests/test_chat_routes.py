@@ -1,12 +1,13 @@
-"""Chat transport tests for explicit diagnostic forecast-model selection."""
+"""Presentation-contract tests for diagnostic and sensor requests."""
 
+from datetime import datetime
 import unittest
 
 from pydantic import ValidationError
 
 from edgemind.application.agent import AgentEvent
 from edgemind.presentation.api.routes.chat import create_router
-from edgemind.presentation.schemas import ChatRequest
+from edgemind.presentation.schemas import ChatRequest, SensorReadingRequest
 
 
 class FakeAgent:
@@ -40,6 +41,18 @@ class ChatRouteTests(unittest.IsolatedAsyncioTestCase):
             ChatRequest(message="預測", model_name="xgboost")
         with self.assertRaises(ValidationError):
             ChatRequest(message="預測", model_name="lstm", unexpected=True)
+
+    def test_sensor_contract_rejects_timezone_naive_timestamp(self):
+        with self.assertRaises(ValidationError):
+            SensorReadingRequest(
+                motor_id="M1",
+                temperature=30,
+                humidity=50,
+                accel_x=0,
+                accel_y=0,
+                accel_z=1,
+                recorded_at=datetime(2026, 1, 1, 0, 0),
+            )
 
 
 if __name__ == "__main__":

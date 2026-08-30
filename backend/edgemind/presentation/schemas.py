@@ -1,9 +1,8 @@
 """Pydantic request contracts owned by the HTTP presentation layer."""
 
-from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 ResearchModelName = Literal[
@@ -34,7 +33,7 @@ class SensorReadingRequest(BaseModel):
     accel_x: float
     accel_y: float
     accel_z: float
-    recorded_at: datetime | None = None
+    recorded_at: AwareDatetime | None = None
     status: str = Field(default="normal", max_length=50)
 
 

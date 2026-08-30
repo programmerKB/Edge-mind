@@ -205,6 +205,53 @@ class SequenceDatasetTests(unittest.TestCase):
             )
         )
 
+    def test_reports_and_excludes_naive_or_off_grid_timestamps(self):
+        rows = make_readings(40)
+        rows.extend(
+            (
+                SimpleNamespace(
+                    **{
+                        **vars(rows[0]),
+                        "recorded_at": rows[0].recorded_at.replace(tzinfo=None),
+                    }
+                ),
+                SimpleNamespace(
+                    **{
+                        **vars(rows[1]),
+                        "recorded_at": rows[1].recorded_at + timedelta(seconds=1),
+                    }
+                ),
+            )
+        )
+
+        dataset = build_sequence_dataset(rows)
+
+        self.assertEqual(dataset.quality.naive_timestamp_rows, 1)
+        self.assertEqual(dataset.quality.off_grid_timestamp_rows, 1)
+        self.assertEqual(dataset.quality.accepted_rows, 40)
+        self.assertEqual(len(dataset.examples), 23)
+
+    def test_live_window_rejects_naive_or_off_grid_timestamps(self):
+        naive = make_readings(36)
+        naive[-1] = SimpleNamespace(
+            **{
+                **vars(naive[-1]),
+                "recorded_at": naive[-1].recorded_at.replace(tzinfo=None),
+            }
+        )
+        with self.assertRaisesRegex(ResearchError, "explicit timezone"):
+            build_inference_sequence(naive)
+
+        off_grid = make_readings(36)
+        off_grid[-1] = SimpleNamespace(
+            **{
+                **vars(off_grid[-1]),
+                "recorded_at": off_grid[-1].recorded_at + timedelta(seconds=1),
+            }
+        )
+        with self.assertRaisesRegex(ResearchError, "UTC grid"):
+            build_inference_sequence(off_grid)
+
     def test_sequences_never_cross_device_boundaries(self):
         rows = make_readings(36, motor_id="A") + make_readings(
             36,

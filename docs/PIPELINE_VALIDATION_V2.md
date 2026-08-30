@@ -2,6 +2,8 @@
 
 > 執行日期：2026-08-28。以下是合成 Demo 的實際軟體驗證結果，不是實體設備效能或論文結論；`research_claims_allowed=false`。
 
+本頁的六模型分數表是 2026-08-28 的保存快照，不會因後續程式修改而手動改寫。2026-08-30 嚴謹性修訂另以目前 source 重建完整研究映像：92 項 backend tests 全部通過（含 SQLAlchemy 與四個 PyTorch adapters），frontend lint／production build、`docker compose config --quiet` 與 `deploy.sh` shell syntax 均通過。這次驗證沒有重新宣稱或更新下表的模型效能數字。
+
 ## 驗證資料與環境
 
 - `DEMO-1`／`DEMO-2`：各 2,016 筆、UTC 五分鐘 cadence、各 1,999 個完整 12×5→6 sequence。
@@ -10,7 +12,7 @@
 - Selection：Ridge alpha grid；PyTorch validation-MAE early stopping；設定凍結後以 1,595 個 development sequences refit。
 - Runtime：Python 3.12.3、SQLAlchemy 2.0.52、PyTorch 2.13.0+cpu、CPU-only、deterministic seed 42。
 
-## 實際十模型 smoke result
+## 實際六模型 smoke result
 
 | Model | Validation MAE | Locked-test MAE | Test RMSE | Test R² | Skill vs Direct Ridge | Cross-device MAE |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -36,7 +38,7 @@ CSV 是可重建的 ignored artifact，不放入 Docker image 或 Git；manifest
 
 ## 工程驗證
 
-- Backend：83 tests passed。
+- Backend（2026-08-28 快照）：83 tests passed；目前 source 的 92-test 結果見頁首修訂紀錄。
 - Model adapters：6/6 available 且可 fit/predict。
 - Dependency check：no broken requirements；SQLAlchemy、PyTorch 均可 import。
 - Frontend：lint passed；production build passed。

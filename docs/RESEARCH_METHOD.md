@@ -16,7 +16,7 @@ X_{t-55:t}\in\mathbb{R}^{12\times5}
 
 現有 production forecast 是重要的可重現 baseline，不應直接刪除或以深度模型取代。Repository 目前同時保留 production 與研究工作台：
 
-- Production 已實作：Persistence、temperature-only Ridge、five-feature Ridge 回測；正式推論仍是最新單點 five-feature Ridge、固定 +30 分鐘、目標最近鄰容許 ±5 分鐘、最後 20% validation。
+- Production-compatible path 已實作：Persistence、temperature-only Ridge、five-feature Ridge 回測；推論仍是最新單點 five-feature Ridge、固定 +30 分鐘、目標最近鄰容許 ±5 分鐘。評估取最後 20% validation，並 purge target time 未嚴格早於第一個 validation origin 的訓練樣本；它仍沒有獨立 locked test。
 - Research workbench 已實作：精確 5 分鐘對齊的 12×5 history、+5…+30 分鐘 direct multi-horizon、60/20/20 與 6-step gaps、3-fold walk-forward runtime default、Direct Ridge／Ridge + History、feature ablation、軌跡與事件風險、逐樣本／split ledger、paired device-day block bootstrap CI 與 JSON／CSV artifacts。
 - Research optional adapters 已實作：DLinear、LSTM、TCN、PatchTST；Compose 預設安裝 CPU-only `backend/requirements-research.txt`，資源受限 image 才明確 override 為只含兩個 Ridge 模型的 `requirements.txt`。
 - Current forecast path 已實作：`POST /api/research/forecasts` 先以 chronological train／validation／locked-test 和 purge gap 計算歷史誤差，再以全部已知標籤重訓，對最新精確 12-step history 產生六點 pending-truth 軌跡、風險、三張圖、資料指紋與 leakage audit；前端與 Agent 均可觸發，歷史誤差與尚未發生的即時真值保持語意隔離。

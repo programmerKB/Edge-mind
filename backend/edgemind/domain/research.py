@@ -80,7 +80,13 @@ def _as_value(record: Any, name: str, default: Any = None) -> Any:
     return getattr(record, name, default)
 
 
-def _as_utc_datetime(value: Any) -> datetime | None:
+def _parse_utc_datetime(
+    value: Any,
+    *,
+    require_timezone: bool = False,
+) -> tuple[datetime | None, str | None]:
+    """Parse one timestamp and preserve why a strict parse failed."""
+
     if isinstance(value, str):
         candidate = value.strip()
         if candidate.endswith("Z"):
@@ -88,12 +94,22 @@ def _as_utc_datetime(value: Any) -> datetime | None:
         try:
             value = datetime.fromisoformat(candidate)
         except ValueError:
-            return None
+            return None, "invalid"
     if not isinstance(value, datetime):
-        return None
-    if value.tzinfo is None:
+        return None, "invalid"
+    if value.tzinfo is None or value.utcoffset() is None:
+        if require_timezone:
+            return None, "naive"
         value = value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+    return value.astimezone(timezone.utc), None
+
+
+def _is_on_utc_grid(value: datetime, sampling_minutes: int) -> bool:
+    interval_seconds = sampling_minutes * 60
+    return (
+        value.microsecond == 0
+        and int(value.timestamp()) % interval_seconds == 0
+    )
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -344,6 +360,8 @@ class AlignmentQuality:
     filtered_out_rows: int
     accepted_rows: int
     invalid_timestamp_rows: int
+    naive_timestamp_rows: int
+    off_grid_timestamp_rows: int
     incomplete_feature_rows: int
     nonfinite_feature_rows: int
     duplicate_timestamp_count: int
@@ -413,6 +431,8 @@ def build_sequence_dataset(
     rows = list(records)
     filtered_out_rows = 0
     invalid_timestamp_rows = 0
+    naive_timestamp_rows = 0
+    off_grid_timestamp_rows = 0
     incomplete_feature_rows = 0
     nonfinite_feature_rows = 0
     out_of_order_rows = 0
@@ -425,9 +445,18 @@ def build_sequence_dataset(
         if device_id is not None and current_device != str(device_id):
             filtered_out_rows += 1
             continue
-        recorded_at = _as_utc_datetime(_as_value(record, "recorded_at"))
+        recorded_at, timestamp_issue = _parse_utc_datetime(
+            _as_value(record, "recorded_at"),
+            require_timezone=True,
+        )
         if recorded_at is None:
-            invalid_timestamp_rows += 1
+            if timestamp_issue == "naive":
+                naive_timestamp_rows += 1
+            else:
+                invalid_timestamp_rows += 1
+            continue
+        if not _is_on_utc_grid(recorded_at, config.sampling_minutes):
+            off_grid_timestamp_rows += 1
             continue
         previous = prior_input_time.get(current_device)
         if previous is not None and recorded_at < previous:
@@ -506,6 +535,8 @@ def build_sequence_dataset(
         filtered_out_rows=filtered_out_rows,
         accepted_rows=accepted_rows,
         invalid_timestamp_rows=invalid_timestamp_rows,
+        naive_timestamp_rows=naive_timestamp_rows,
+        off_grid_timestamp_rows=off_grid_timestamp_rows,
         incomplete_feature_rows=incomplete_feature_rows,
         nonfinite_feature_rows=nonfinite_feature_rows,
         duplicate_timestamp_count=len(duplicate_groups),
@@ -560,10 +591,21 @@ def build_inference_sequence(
     grouped: dict[datetime, list[Any]] = {}
     invalid_timestamp_count = 0
     for record in rows:
-        recorded_at = _as_utc_datetime(_as_value(record, "recorded_at"))
+        recorded_at, timestamp_issue = _parse_utc_datetime(
+            _as_value(record, "recorded_at"),
+            require_timezone=True,
+        )
         if recorded_at is None:
+            if timestamp_issue == "naive":
+                raise ResearchError(
+                    "live inference timestamps must include an explicit timezone"
+                )
             invalid_timestamp_count += 1
             continue
+        if not _is_on_utc_grid(recorded_at, config.sampling_minutes):
+            raise ResearchError(
+                "live inference timestamps must align to the configured UTC grid"
+            )
         grouped.setdefault(recorded_at, []).append(record)
     if not grouped:
         raise ResearchError("live inference has no valid timestamps")
@@ -1849,10 +1891,16 @@ def run_feature_ablations(
     config: ResearchConfig,
     *,
     specs: Sequence[AblationSpec] = DEFAULT_ABLATIONS,
+    development_examples: Sequence[SequenceExample] | None = None,
 ) -> list[dict[str, Any]]:
     """Run the five predeclared multi-sensor feature comparisons."""
 
     registry = build_default_registry()
+    final_refit_examples = tuple(
+        development_examples
+        if development_examples is not None
+        else (*split.train, *split.validation)
+    )
     results: list[dict[str, Any]] = []
     for spec in specs:
         registration = registry.get(spec.model_name)
@@ -1876,7 +1924,7 @@ def run_feature_ablations(
             started = time.perf_counter_ns()
             _fit_with_development_validation(model, split.train, split.validation)
             validation = evaluate_model(model, split.validation, config)
-            _refit_on_development(model, (*split.train, *split.validation))
+            _refit_on_development(model, final_refit_examples)
             training_ms = (time.perf_counter_ns() - started) / 1_000_000
             test = evaluate_model(model, split.test, config)
             validation.pop("prediction_records", None)
@@ -1887,7 +1935,13 @@ def run_feature_ablations(
                     "status": "available",
                     "validation": validation,
                     "test": test,
-                    "training": _training_metadata(model),
+                    "training": {
+                        **_training_metadata(model),
+                        "selection_fit_sample_count": len(split.train),
+                        "selection_validation_sample_count": len(split.validation),
+                        "final_refit_sample_count": len(final_refit_examples),
+                        "locked_test_used_for_selection": False,
+                    },
                     "efficiency": {
                         "training_time_ms": training_ms,
                         "inference_latency_ms": test["inference_latency_ms"],
@@ -2238,7 +2292,13 @@ def run_research_experiment(
         "models": model_results,
         "statistical_comparisons": statistical_comparisons,
         "ablations": (
-            run_feature_ablations(split, config) if include_ablations else []
+            run_feature_ablations(
+                split,
+                config,
+                development_examples=development_examples,
+            )
+            if include_ablations
+            else []
         ),
     }
 

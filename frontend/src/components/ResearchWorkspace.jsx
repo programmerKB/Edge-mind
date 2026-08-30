@@ -374,7 +374,7 @@ function ReadinessCard({ title, motor, minimumReadings }) {
         <span>{title}</span>
         {eligible !== null && (
           <span className={`qualification ${eligible ? 'qualified' : 'insufficient'}`}>
-            {studyEligible ? '探索資料充足' : eligible ? '筆數預檢通過' : '資料不足'}
+            {studyEligible ? '探索筆數門檻通過' : eligible ? '筆數預檢通過' : '資料不足'}
           </span>
         )}
       </div>
@@ -901,7 +901,7 @@ function MethodologyPanel({ report, form }) {
       <details>
         <summary>查看實驗控制與解讀原則</summary>
         <div className="method-details">
-          <p>{typeof method === 'string' ? method : method.description || '所有模型共用相同輸入視窗、預測目標與時間切分；測試集只用於最終一次評估。'}</p>
+          <p>{typeof method === 'string' ? method : method.description || '模型共用相同合格樣本、預測目標與時間切分；Direct Ridge 僅取當下單點作資訊受限 baseline。'}</p>
           <ul><li>Direct Ridge 是共同 baseline，較複雜模型需證明準確度增益。</li><li>消融實驗回答濕度、震動與歷史趨勢是否真正帶來貢獻。</li><li>若模型套件或資料條件不足，結果明確標記 unavailable，而非補入模擬分數。</li></ul>
         </div>
       </details>
@@ -957,7 +957,7 @@ export default function ResearchWorkspace({ active }) {
           <div>
             <span className="research-eyebrow"><Activity size={14} /> Edge AI forecasting study</span>
             <h1 id="research-page-title">溫度軌跡與過熱風險研究工作台</h1>
-            <p>以過去一小時多感測器序列，公平比較未來 5–30 分鐘的預測準確度、運算成本與跨設備泛化。</p>
+            <p>以相同 sample IDs、targets 與時間切分，比較單點 baseline 與歷史序列模型在未來 5–30 分鐘的誤差、運算成本與跨設備表現。</p>
           </div>
           <div className="research-scope"><span>輸入</span><strong>12 × 5</strong><i /><span>輸出</span><strong>6 horizons</strong></div>
         </header>

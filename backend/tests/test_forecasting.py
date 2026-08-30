@@ -120,6 +120,31 @@ class ForecastingTests(unittest.TestCase):
             delta=0.05,
         )
 
+    def test_validation_purges_training_targets_that_cross_its_origin(self):
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        examples = [
+            TrainingExample(
+                source_time=start + timedelta(minutes=5 * index),
+                target_time=start + timedelta(minutes=5 * index + 30),
+                features=(20 + index, 50, 0.1, 0.2, 1.0),
+                target_temperature=22 + index,
+            )
+            for index in range(40)
+        ]
+
+        payload = train_temperature_model(examples)
+
+        self.assertEqual(
+            payload["validation_strategy"],
+            "chronological_tail_with_target_time_purge",
+        )
+        self.assertEqual(payload["validation_purged_sample_count"], 6)
+        self.assertTrue(payload["validation_targets_end_before_validation_sources"])
+        self.assertLess(
+            datetime.fromisoformat(payload["validation_training_last_target_time"]),
+            datetime.fromisoformat(payload["validation_first_source_time"]),
+        )
+
     def test_rejects_insufficient_history(self):
         with self.assertRaises(ForecastError):
             train_temperature_model([])

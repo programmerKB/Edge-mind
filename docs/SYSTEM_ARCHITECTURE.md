@@ -27,7 +27,7 @@
 | Forecast input | 最新單點 5 features | 最近 12 steps × 5 features；History Ridge 加 summaries | 線上 sequence buffer 與版本化 feature schema |
 | Forecast output | +30 分鐘單一溫度 | 每次先完成歷史 locked-test 評估與全資料重訓，再輸出最新 12-step 的 +5/+10/+15/+20/+25/+30 pending-truth 軌跡、risk 與三張圖 | Promoted trajectory API、truth backfill、event warning |
 | 模型 | 標準函式庫 Ridge | Direct Ridge／Ridge + History/Trend；研究依賴啟用 DLinear／LSTM／TCN／PatchTST | 公平 tuning、多 seeds、可部署 artifact variants |
-| Validation | 最後 20%，無獨立 test | 60/20/20 + 6-step gap + runtime 預設 3-fold walk-forward；external device 全量 holdout | 預註冊 folds、locked-test access audit、block statistics |
+| Validation | 最後 20% + target-time purge，無獨立 test | 60/20/20 + 6-step gap + runtime 預設 3-fold walk-forward；external device 全量 holdout | 預註冊 folds、locked-test access audit、block statistics |
 | 模型保存 | 每 motor 最新 JSON | 每實驗 immutable JSON + 七張 ledger／分析 CSV 及 checksum | model versions、stage、lineage、完整 preprocessing bundle |
 | Risk | 固定溫度門檻分類報表 | trajectory max/crossing/TTT/rate、Low/Medium/High、boundary-aware event evaluation | 工程核准與版本化 policy |
 | Report | 每次 inference CSV/SVG、performance aggregate | model/per-horizon/ablation、prediction/split/event、paired block CI | per-device/seed、paired significance、Pareto、edge benchmark 完整 run bundle |
