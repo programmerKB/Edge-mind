@@ -16,20 +16,22 @@ from edgemind.domain.research import (
     BASE_FEATURE_NAMES,
     DEFAULT_HORIZONS_MINUTES,
     DEFAULT_MODEL_NAMES,
-    OPTIONAL_MODEL_NAMES,
     ModelRegistry,
     ResearchConfig,
     ResearchError,
     build_inference_sequence,
     build_sequence_dataset,
+    chronological_split,
     derive_risk,
+    evaluate_model,
     run_research_experiment,
 )
 
 
-ALL_RESEARCH_MODELS = DEFAULT_MODEL_NAMES + OPTIONAL_MODEL_NAMES
+ALL_RESEARCH_MODELS = DEFAULT_MODEL_NAMES
 MIN_THRESHOLD_C = 20.0
 MAX_THRESHOLD_C = 120.0
+HISTORICAL_CHART_POINT_LIMIT = 60
 
 
 def _validated_threshold(value: float) -> float:
@@ -73,6 +75,71 @@ def _synthetic_evidence(records: Sequence[SensorReading]) -> bool:
     )
 
 
+def _fit_with_validation(model, training, validation) -> None:
+    """Select supported training controls without exposing locked-test labels."""
+    method = getattr(model, "fit_with_validation", None)
+    if callable(method):
+        method(training, validation)
+    else:
+        model.fit(training)
+
+
+def _refit(model, examples) -> None:
+    """Refit with frozen training controls on a larger known-history release."""
+    method = getattr(model, "refit_on_development", None)
+    if callable(method):
+        method(examples)
+    else:
+        model.fit(examples)
+
+
+def _compact_historical_evaluation(evaluation: dict) -> dict:
+    """Keep auditable metrics and a bounded time series without bulky ledgers."""
+    prediction_records = [
+        record
+        for record in evaluation.get("prediction_records", [])
+        if isinstance(record, dict)
+    ]
+    chart_horizon = max(
+        (
+            int(record["horizon_minutes"])
+            for record in prediction_records
+            if isinstance(record.get("horizon_minutes"), (int, float))
+        ),
+        default=None,
+    )
+    chart_records = (
+        [
+            record
+            for record in prediction_records
+            if int(record.get("horizon_minutes", -1)) == chart_horizon
+        ][-HISTORICAL_CHART_POINT_LIMIT:]
+        if chart_horizon is not None
+        else []
+    )
+    return {
+        "truth_status": "observed",
+        "overall": evaluation["overall"],
+        "target_distribution": evaluation["target_distribution"],
+        "by_horizon": evaluation["by_horizon"],
+        "latest_forecast": evaluation["latest_forecast"],
+        "chart_series": {
+            "horizon_minutes": chart_horizon,
+            "point_count": len(chart_records),
+            "points": [
+                {
+                    "origin_time": record.get("origin_time"),
+                    "target_time": record.get("target_time"),
+                    "actual_temperature_c": record.get("actual"),
+                    "predicted_temperature_c": record.get("predicted"),
+                }
+                for record in chart_records
+            ],
+        },
+        "inference_latency_ms": evaluation["inference_latency_ms"],
+    }
+
+
 class ResearchService:
     """Coordinate sensor repositories, pure study rules, and result storage."""
 
@@ -91,9 +158,10 @@ class ResearchService:
                 "default_60min_history_30min_horizon_count_precheck"
             )
             summary["runtime_quality_audit_required"] = True
+            summary["eligibility_basis"] = "complete_reading_count_only"
             summary["study_eligible"] = count >= 2_016
             summary["study_eligibility_reason"] = (
-                "至少七天的五分鐘資料，可開始探索性研究"
+                "筆數達七天理論格點量；仍須通過 cadence、期間、事件與來源稽核"
                 if summary["study_eligible"]
                 else "資料少於七天（2,016 筆），僅建議流程驗證"
             )
@@ -147,9 +215,9 @@ class ResearchService:
             "warnings": [
                 "DEMO 與 RESEARCH 合成資料只驗證流程，不代表真實設備效能。",
                 "正式結論必須使用預先登記、具設備/工況來源的長期真實資料。",
-                "所有模型使用完全相同的時間分割、gap、horizon 與特徵消融規則。",
+                "候選模型共用 sample IDs、時間分割、gap 與 horizons；Direct Ridge 是只看當下單點的資訊受限 baseline。",
                 "模型只可用 development validation 選超參數；locked test 不參與調參。",
-                "低變異 holdout 的 R² 可能非常負，須與 MAE 及 Persistence skill 一起解讀。",
+                "低變異 holdout 的 R² 可能非常負，須與 MAE 及 Direct Ridge skill 一起解讀。",
             ],
         }
 
@@ -205,11 +273,24 @@ class ResearchService:
             if not evaluation_records:
                 raise ResearchError(f"找不到評估設備 {evaluation_motor_id} 的感測資料")
 
+        normalized_model_names = tuple(
+            str(model_name).strip().lower() for model_name in model_names
+        )
+        unsupported_models = sorted(
+            set(normalized_model_names) - set(ALL_RESEARCH_MODELS)
+        )
+        if unsupported_models:
+            raise ResearchError(
+                "unsupported model_names: "
+                f"{', '.join(unsupported_models)}; allowed models: "
+                f"{', '.join(ALL_RESEARCH_MODELS)}"
+            )
+
         result = run_research_experiment(
             training_records,
             evaluation_records,
             config=config,
-            model_names=tuple(model_names),
+            model_names=normalized_model_names,
             registry=self._registry,
             include_ablations=include_ablations,
         )
@@ -276,6 +357,11 @@ class ResearchService:
         model_name = model_name.strip().lower()
         if not motor_id or not training_motor_id:
             raise ResearchError("motor_id and training_motor_id cannot be empty")
+        if model_name not in ALL_RESEARCH_MODELS:
+            raise ResearchError(
+                f"unsupported model_name: {model_name}; allowed models: "
+                f"{', '.join(ALL_RESEARCH_MODELS)}"
+            )
         threshold_c = _validated_threshold(threshold_c)
         if sampling_minutes <= 0:
             raise ResearchError("sampling_minutes must be positive")
@@ -327,10 +413,37 @@ class ResearchService:
                 "use a time-valid training release"
             )
 
+        split = chronological_split(training_dataset, config)
+        development_examples = tuple(
+            example
+            for example in training_dataset.examples
+            if example.anchor_time <= split.validation[-1].anchor_time
+        )
+        if any(
+            target_time >= split.test[0].anchor_time
+            for example in development_examples
+            for target_time in example.target_times
+        ):
+            raise ResearchError(
+                "development target crosses the locked-test boundary"
+            )
+
         model = registration.factory(config, BASE_FEATURE_NAMES)
-        training_started = time.perf_counter_ns()
-        model.fit(training_dataset.examples)
-        training_time_ms = (time.perf_counter_ns() - training_started) / 1_000_000
+        evaluation_training_started = time.perf_counter_ns()
+        _fit_with_validation(model, split.train, split.validation)
+        validation_evaluation = evaluate_model(model, split.validation, config)
+        _refit(model, development_examples)
+        locked_test_evaluation = evaluate_model(model, split.test, config)
+        evaluation_training_time_ms = (
+            time.perf_counter_ns() - evaluation_training_started
+        ) / 1_000_000
+
+        final_refit_started = time.perf_counter_ns()
+        _refit(model, training_dataset.examples)
+        final_refit_time_ms = (
+            time.perf_counter_ns() - final_refit_started
+        ) / 1_000_000
+        training_time_ms = evaluation_training_time_ms + final_refit_time_ms
         inference_started = time.perf_counter_ns()
         predictions = tuple(float(value) for value in model.predict(inference))
         inference_time_ms = (time.perf_counter_ns() - inference_started) / 1_000_000
@@ -394,6 +507,27 @@ class ResearchService:
                 for index, horizon in enumerate(config.horizons_minutes)
             ],
             "risk": risk.to_dict(),
+            "historical_evaluation": {
+                "status": "completed",
+                "protocol": "chronological_train_validation_locked_test",
+                "description": (
+                    "模型誤差來自已有真值的歷史鎖定測試集；即時未來預測"
+                    "則等待目標時間到達後另行驗證。"
+                ),
+                "split": split.to_dict(config.sampling_minutes),
+                "validation": _compact_historical_evaluation(
+                    validation_evaluation
+                ),
+                "locked_test": _compact_historical_evaluation(
+                    locked_test_evaluation
+                ),
+                "locked_test_used_for_selection": False,
+                "final_operational_refit_sample_count": len(
+                    training_dataset.examples
+                ),
+                "evaluation_training_time_ms": evaluation_training_time_ms,
+                "final_refit_time_ms": final_refit_time_ms,
+            },
             "training_dataset": training_dataset.to_dict(),
             "leakage_audit": {
                 "latest_training_target_time": latest_training_target.isoformat(),

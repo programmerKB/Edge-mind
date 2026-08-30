@@ -16,11 +16,12 @@ X_{t-55:t}\in\mathbb{R}^{12\times5}
 
 現有 production forecast 是重要的可重現 baseline，不應直接刪除或以深度模型取代。Repository 目前同時保留 production 與研究工作台：
 
-- Production 已實作：Persistence、temperature-only Ridge、five-feature Ridge 回測；正式推論仍是最新單點 five-feature Ridge、固定 +30 分鐘、目標最近鄰容許 ±5 分鐘、最後 20% validation。
-- Research workbench 已實作：精確 5 分鐘對齊的 12×5 history、+5…+30 分鐘 direct multi-horizon、60/20/20 與 6-step gaps、3-fold walk-forward runtime default、Persistence／Ridge Snapshot／Ridge + History、feature ablation、軌跡與事件風險、逐樣本／split ledger、paired device-day block bootstrap CI 與 JSON／CSV artifacts。
-- Research optional adapters 已實作：XGBoost、GRU、LSTM、TCN、DLinear、Transformer、PatchTST；Compose 預設安裝 CPU-only `backend/requirements-research.txt`，資源受限 image 才明確 override 為只含三個 baseline 的 `requirements.txt`。
-- Current forecast path 已實作：`POST /api/research/forecasts` 以最新精確 12-step history 產生六點 pending-truth 軌跡、風險、資料指紋與 leakage audit；前端與 Agent 均可觸發，結果與 offline test artifact 分開保存。
-- Runtime v2 已完成：Ridge development-only alpha grid、XGBoost validation early stopping、六個 PyTorch 模型 validation MAE early stopping、最佳 epoch／tree count 凍結後 development refit，以及 locked-test skill score。尚未成為一鍵正式論文 pipeline的部分是：多 seed orchestration、完整架構超參數 trial budget、自動 Holm orchestration與真正 target-hardware energy benchmark。
+- Production-compatible path 已實作：Persistence、temperature-only Ridge、five-feature Ridge 回測；推論仍是最新單點 five-feature Ridge、固定 +30 分鐘、目標最近鄰容許 ±5 分鐘。評估取最後 20% validation，並 purge target time 未嚴格早於第一個 validation origin 的訓練樣本；它仍沒有獨立 locked test。
+- Research workbench 已實作：精確 5 分鐘對齊的 12×5 history、+5…+30 分鐘 direct multi-horizon、60/20/20 與 6-step gaps、3-fold walk-forward runtime default、Direct Ridge／Ridge + History、feature ablation、軌跡與事件風險、逐樣本／split ledger、paired device-day block bootstrap CI 與 JSON／CSV artifacts。
+- Research optional adapters 已實作：DLinear、LSTM、TCN、PatchTST；Compose 預設安裝 CPU-only `backend/requirements-research.txt`，資源受限 image 才明確 override 為只含兩個 Ridge 模型的 `requirements.txt`。
+- Current forecast path 已實作：`POST /api/research/forecasts` 先以 chronological train／validation／locked-test 和 purge gap 計算歷史誤差，再以全部已知標籤重訓，對最新精確 12-step history 產生六點 pending-truth 軌跡、風險、三張圖、資料指紋與 leakage audit；前端與 Agent 均可觸發，歷史誤差與尚未發生的即時真值保持語意隔離。
+- 歷史 actual-vs-predicted 圖固定使用 request 中最遠 horizon，沿時間顯示 locked test 最近最多 60 個已觀測樣本；不能只拿最後一條 trajectory，否則單一 horizon 請求會退化成無法辨識的一個點。
+- Runtime v2 已完成：Ridge development-only alpha grid、四個 PyTorch 模型 validation MAE early stopping、最佳 epoch 凍結後 development refit，以及相對 Direct Ridge 的 locked-test skill score。尚未成為一鍵正式論文 pipeline的部分是：多 seed orchestration、完整架構超參數 trial budget、自動 Holm orchestration與真正 target-hardware energy benchmark。
 - `DEMO-1`／`DEMO-2` 是流程測試資料，不能用來主張真實設備準確度或模型優越性。
 
 目前 optional adapters 採固定研究 seed 與受控小型架構，並已套用 validation early stopping；在補齊一致的架構搜尋 trial budget與五個 seeds 之前，單次 run 仍只能視為探索性結果，不能宣稱某架構普遍優於另一架構。
@@ -28,7 +29,7 @@ X_{t-55:t}\in\mathbb{R}^{12\times5}
 ### 1.1 研究目標
 
 1. 衡量歷史序列相對單點輸入是否改善未來溫度軌跡預測。
-2. 在相同資料、切分、調參預算與硬體下，比較線性、樹模型、循環網路與卷積序列模型。
+2. 在相同資料、切分、調參預算與硬體下，比較 Ridge、線性序列、循環網路、卷積序列與 patch-based 模型。
 3. 驗證濕度、振動與歷史趨勢各自提供的增益。
 4. 找出預測誤差與維護提前量之間可接受的 horizon。
 5. 檢驗同設備與跨設備泛化，避免只在單一馬達上得到結論。
@@ -59,7 +60,7 @@ flowchart LR
 | 編號 | 研究問題 | 預先假設 | 主要比較與指標 |
 | --- | --- | --- | --- |
 | RQ1 | 歷史序列是否優於單點輸入？ | H1：Ridge + History 的 test MAE 低於現有 five-feature Ridge | paired MAE 差與 95% CI |
-| RQ2 | 哪一類模型最適合溫度軌跡？ | H2：至少一個非線性／序列模型優於 Persistence，但未預設 LSTM 必勝 | 全 horizon macro MAE；Holm 校正後比較 |
+| RQ2 | 哪一類模型最適合溫度軌跡？ | H2：至少一個歷史／序列模型優於 Direct Ridge，但未預設 LSTM 必勝 | 全 horizon macro MAE；Holm 校正後比較 |
 | RQ3 | 哪些感測特徵真正有用？ | H3：歷史溫度趨勢有穩定增益；濕度與加速度的增益需由 ablation 決定 | 相對全特徵模型的 MAE、PR-AUC 變化 |
 | RQ4 | 最多能提前多久可信預警？ | H4：horizon 越長誤差通常越高；30 分鐘是否值得採用由精度與 lead time 共同決定 | +5…+30 分鐘逐 horizon MAE、event lead time |
 | RQ5 | 模型能否跨設備使用？ | H5：zero-shot 跨設備表現低於同設備模型；有限校正可縮小差距 | leave-one-device-out macro MAE／PR-AUC |
@@ -74,7 +75,7 @@ flowchart LR
 - History length \(L=12\)，涵蓋 `t-55, ..., t` 共 60 分鐘。
 - Primary horizon \(H=6\)，同時預測 `t+5, ..., t+30`。
 - 核心輸入：`temperature`, `humidity`, `accel_x`, `accel_y`, `accel_z`。
-- 評估輸出：六個絕對溫度值。除 Persistence 外，學習模型訓練 `ΔT_h=T(t+h)-T(t)`，推論再加回 `T(t)`；這降低跨時間位準漂移，評分公式與 °C 真值完全不變。測試期真值、未來狀態或人工 `status` 不進入輸入。
+- 評估輸出：六個絕對溫度值。所有模型訓練 `ΔT_h=T(t+h)-T(t)`，推論再加回 `T(t)`；這降低跨時間位準漂移，評分公式與 °C 真值完全不變。測試期真值、未來狀態或人工 `status` 不進入輸入。
 - +60 分鐘是第二階段敏感度實驗，必須另建 12-step label，不可用外插方式假裝成模型輸出。
 
 以 origin time \(t\) 建立一個樣本：
@@ -120,21 +121,16 @@ Origin time 已經 `T_t >= critical` 的 window 屬於「ongoing event detection
 
 | ID | 模型 | 輸入表示 | 多 horizon 作法 | 研究角色 |
 | --- | --- | --- | --- | --- |
-| M0 | Persistence (`persistence`) | 最後一筆溫度 | 六個 horizon 均為 \(T_t\) | 必做 naive baseline，無訓練 |
-| M1 | Legacy Ridge | `t` 的五特徵 | 只預測 +30；沿用現況配對 | 與舊系統連續性比較，不列入六輸出總排名 |
-| M2 | Ridge Snapshot (`ridge_direct`) | `t` 的五特徵 | 每 horizon 一個 Ridge | 控制「只有輸出改成多 horizon」的影響 |
-| M3 | Ridge + History (`ridge_history_trend`) | 12×5 flatten，加上只由 history 算出的 slope／mean／std／min／max | 每 horizon 一個 Ridge | 可解釋歷史 baseline |
-| M4 | XGBoost (`xgboost`) | 12×5 flatten；formal sensitivity 可加入與 M3 同源的 summary features | 每 horizon 一個 regressor | 非線性 tabular baseline |
-| M5 | GRU (`gru`) | 標準化 12×5 sequence | shared encoder + 6-output head | 較精簡循環模型 |
-| M6 | LSTM (`lstm`) | 標準化 12×5 sequence | shared encoder + 6-output head | canonical recurrent comparator |
-| M7 | TCN (`tcn`) | causal dilated 1D convolution | 6-output head | 並行、edge-friendly sequence comparator |
-| M8 | DLinear (`dlinear`) | decomposition 後的 12×5 sequence | per-feature linear + 6-output projection | 簡單線性 sequence baseline |
-| M9 | Transformer (`transformer`) | 12×5 sequence + learned position | 2-layer encoder + 6-output head | attention comparator |
-| M10 | PatchTST (`patchtst`) | channel-independent length-4 patches | 2-layer encoder + 6-output head | patch-based comparator |
+| M0 | Direct Ridge (`ridge_direct`) | `t` 的五特徵 | 每 horizon 一個 Ridge | 單點輸入 baseline |
+| M1 | Ridge + History/Trend (`ridge_history_trend`) | 12×5 flatten，加上只由 history 算出的 slope／mean／std／min／max | 每 horizon 一個 Ridge | 可解釋歷史 baseline |
+| M2 | DLinear (`dlinear`) | decomposition 後的 12×5 sequence | per-feature linear + 6-output projection | 簡單線性 sequence baseline |
+| M3 | LSTM (`lstm`) | 標準化 12×5 sequence | shared encoder + 6-output head | canonical recurrent comparator |
+| M4 | TCN (`tcn`) | causal dilated 1D convolution | 6-output head | 並行、edge-friendly sequence comparator |
+| M5 | PatchTST (`patchtst`) | channel-independent length-4 patches | 2-layer encoder + 6-output head | patch-based comparator |
 
-三者已具可執行 adapter，但正式研究仍應設資料與資源 gate；未通過 gate 時可保留 `unavailable`／不執行，且不可將缺席解讀為較差。
+六種模型均已具可執行 adapter，但正式研究仍應設資料與資源 gate；未通過 gate 時可保留 `unavailable`／不執行，且不可將缺席解讀為較差。
 
-目前 executable adapters 是受控 prototype：XGBoost 使用 flatten history；GRU／LSTM 使用單層 32-unit encoder；TCN 使用 dilation 1／2／4 的 causal Conv1d；DLinear 使用 moving-average trend/seasonal decomposition；Transformer 使用 learned position 與兩層 encoder；PatchTST 使用 channel-independent length-4 patches 與兩層 encoder。神經模型以各 horizon 等權 MAE（L1）訓練，預設最多 160 epochs、patience 16、batch 128；最佳 epoch 只由 validation 決定。XGBoost 每 horizon 最多 600 trees、patience 24。正式比較仍須補齊一致的 architecture search budget 與多 seed protocol。
+目前 executable adapters 是受控 prototype：LSTM 使用單層 32-unit encoder；TCN 使用 dilation 1／2／4 的 causal Conv1d；DLinear 使用 moving-average trend/seasonal decomposition；PatchTST 使用 channel-independent length-4 patches與兩層 encoder。PyTorch 模型以各 horizon 等權 MAE（L1）訓練，預設最多 160 epochs、patience 16、batch 128；最佳 epoch 只由 validation 決定。正式比較仍須補齊一致的 architecture search budget 與多 seed protocol。
 
 ### 4.1 建議的受控搜尋空間
 
@@ -143,11 +139,9 @@ Origin time 已經 `T_t >= critical` 的 window 屬於「ongoing event detection
 | 模型 | 搜尋參數（建議初值） |
 | --- | --- |
 | Ridge | `alpha ∈ {1e-4, 1e-3, 1e-2, 1e-1, 1, 10}` |
-| XGBoost | depth 2–8、learning rate 0.01–0.2、estimators 100–1000、subsample／colsample 0.6–1.0、early stopping |
-| GRU/LSTM | 1–2 layers、hidden 16/32/64/128、dropout 0–0.3、learning rate 1e-4–3e-3、batch 32/64/128 |
+| LSTM | 1–2 layers、hidden 16/32/64/128、dropout 0–0.3、learning rate 1e-4–3e-3、batch 32/64/128 |
 | TCN | channels 16/32/64、kernel 2/3/5、dilation blocks 2–4、dropout 0–0.3 |
 | DLinear | moving-average kernel 3/5/7、individual/shared linear heads |
-| Transformer | d_model 32/64、heads 2/4、layers 1–3、dropout 0–0.3 |
 | PatchTST | patch length 3/4/6、stride 1/2/3、d_model 32/64、heads 2/4；所有模型 trial 預算一致 |
 
 神經模型用 validation MAE early stopping，保存最佳 epoch；最大 epoch、patience 與 batch size 一併記錄。預設損失為各 horizon 等權 MAE；若改用加權 loss，必須另列實驗且在看 test 前決定權重。
@@ -178,7 +172,7 @@ Origin time 已經 `T_t >= critical` 的 window 屬於「ongoing event detection
 | B | Temperature + Humidity |
 | C | Temperature + Acceleration XYZ |
 | D | Temperature + Humidity + Acceleration XYZ |
-| E | D + 只由 history 計算的 trend summaries（Ridge／XGBoost）；序列模型直接使用 history，另可加 summaries 做敏感度分析 |
+| E | D + 只由 history 計算的 trend summaries（Ridge）；序列模型直接使用 history，另可加 summaries 做敏感度分析 |
 
 對 acceleration 的結果需注意單位、sensor orientation 與取樣方式；若原始訊號是高頻振動，應另做「XYZ snapshot vs 5-minute vibration aggregates」實驗，不可將一個瞬時 XYZ 值當作完整振動資訊。
 
@@ -214,18 +208,18 @@ Origin time 已經 `T_t >= critical` 的 window 屬於「ongoing event detection
 
 ### E6：風險與預警比較
 
-比較目前溫度門檻、Persistence 軌跡、各 forecast model 衍生風險。主分析以事件為單位，另提供 window-level confusion matrix。若 test 內正事件不足，PR-AUC、recall 與 lead-time 結果只列探索性結果，不做確證結論。
+比較目前溫度門檻、Direct Ridge 軌跡與其他 forecast model 衍生風險。主分析以事件為單位，另提供 window-level confusion matrix。若 test 內正事件不足，PR-AUC、recall 與 lead-time 結果只列探索性結果，不做確證結論。
 
 ## 6. 公平比較規則
 
-模型矩陣包含兩種不同目的：M0/M2 是刻意限制資訊的 baseline，用來回答 history 是否有價值；M3–M10 是 model-family 主比較，全部可取得相同 12×5 raw history。各模型可使用與架構相符、已聲明的 deterministic representation，但不能額外取得不同時間範圍或 sensor。M1 的 legacy pairing 與輸出不同，只做系統連續性，不參與六 horizon 總排名。
+模型矩陣包含兩種不同目的：M0 刻意限制為單點輸入，用來回答 history 是否有價值；M1–M5 是 model-family 主比較，全部可取得相同 12×5 raw history。各模型可使用與架構相符、已聲明的 deterministic representation，但不能額外取得不同時間範圍或 sensor。
 
 1. 同一實驗內所有模型取得相同 sample IDs；因缺值而被排除的 window 清單存檔。
 2. split manifest 在特徵處理前建立並凍結；任何 scaler、imputer、feature selector、門檻校準與資料增強只 fit training portion。
 3. hyperparameter selection 只能讀 validation／inner walk-forward；test 僅在 pipeline 與分析計畫凍結後執行一次。
-4. Persistence 無調參。決定性模型執行一次 fit，但仍以相同 test blocks bootstrap；隨機模型至少 5 個預先列出的 seeds。
+4. Ridge 以 validation 選 alpha；決定性模型仍以相同 test blocks bootstrap，隨機模型至少 5 個預先列出的 seeds。
 5. 所有模型使用相同 loss aggregation 與 horizon weights；若某模型用不同資料或額外感測器，列為獨立擴充實驗。
-6. 神經模型與 XGBoost 都使用 validation-based early stopping；不得以 test 最佳 epoch 報告。
+6. PyTorch 模型使用 validation-based early stopping；不得以 test 最佳 epoch 報告。
 7. 訓練失敗、OOM 或不收斂也需留存 run status 與原因，不可靜默刪除失敗 seed。
 8. 主要模型表同時列參數量／artifact size／延遲；精度最佳與部署推薦可以是不同模型。
 9. 比較報告須顯示樣本數、設備數、事件數與 coverage，不能只顯示一個平均值。
@@ -253,14 +247,14 @@ Locked test                                      ████
 - **Primary**：六個 horizon 等權 macro MAE；先在每設備／seed 算，再跨設備平均。
 - Secondary：逐 horizon MAE、RMSE、median absolute error、max absolute error、R²、mean error（bias）。
 - MAPE 可為現有系統相容性指標；因溫度量綱與接近零問題，研究結論不以 MAPE 單獨判定，可補 sMAPE。
-- `relative_improvement_vs_persistence = (MAE_persistence - MAE_model) / MAE_persistence`。
+- `relative_improvement_vs_ridge_direct = (MAE_ridge_direct - MAE_model) / MAE_ridge_direct`。
 - 軌跡品質另報 predicted max error 與 heating-rate error。
 
 #### R² 與舊版低分的解讀
 
 舊版畫面不是「深度模型一定無效」，而是三個問題同時發生：36 筆只能形成 19 個嚴格序列；合成溫度近乎單調且 holdout 變異很小；學習模型直接預測絕對溫度又固定訓練 80 epochs。R² 定義為 `1-SSE/SST`，當 test 真值的 `SST` 接近零時，即使 MAE 只有零點幾度，也會出現很大的負值。負 R² 代表不如該 test 的平均值 baseline，不是程式應抹掉的異常值。
 
-Runtime v2 同時報 `target_distribution.stddev_c`、low-variance 警告、原始 MAE／RMSE／R²，以及 `skill_score_vs_persistence=1-MAE_model/MAE_persistence`。不得裁切負 R²、刪除失敗模型、挑最好 seed、用 test early-stop，或調整 synthetic generator 來迎合特定模型。即使完成公平調參，某模型仍可能誠實地輸給 Persistence；研究目標是每個模型在相同限制下達到自身可重現最佳，而不是讓所有分數看起來相同。
+Runtime v2 同時報 `target_distribution.stddev_c`、low-variance 警告、原始 MAE／RMSE／R²，以及 `skill_score_vs_ridge_direct=1-MAE_model/MAE_ridge_direct`。不得裁切負 R²、刪除失敗模型、挑最好 seed、用 test early-stop，或調整 synthetic generator 來迎合特定模型。即使完成公平調參，某模型仍可能誠實地輸給 Direct Ridge；研究目標是每個模型在相同限制下達到自身可重現最佳，而不是讓所有分數看起來相同。
 
 ### 8.2 分類與事件
 
@@ -284,7 +278,7 @@ Runtime v2 同時報 `target_distribution.stddev_c`、low-variance 警告、原�
 
 1. 隨機模型固定 seeds：`[17, 29, 43, 71, 101]`；若增加 seeds，須對所有候選一致執行。
 2. 以「設備 × 日期／運轉 session」為 resampling block 做 paired block bootstrap（建議 10,000 次），產生 MAE 差與相對改善的 95% percentile CI。不可把重疊 windows 當獨立樣本做一般 t-test。
-3. 主要模型與 Persistence、以及候選模型與 Ridge + History 做事先指定的 paired comparisons。兩模型可用 block-level permutation 或 Wilcoxon signed-rank；樣本 block 太少時只報 CI 與效果量。
+3. 主要模型與 Direct Ridge、以及候選模型與 Ridge + History 做事先指定的 paired comparisons。兩模型可用 block-level permutation 或 Wilcoxon signed-rank；樣本 block 太少時只報 CI 與效果量。
 4. 多模型／多 horizon p-value 以 Holm 方法校正；同時報絕對差、相對差與 CI，不只報顯著與否。
 5. 神經模型先對每個 seed 取得 block 指標，再報 seed mean ± SD；bootstrap 時以配對 seed 或先聚合 seed，分析方式需寫入 run metadata。
 6. Cross-device 以 held-out device 為統計單位。設備數太少時不做廣泛母體推論，結論限定於受測機群。
@@ -304,7 +298,7 @@ Runtime v2 同時報 `target_distribution.stddev_c`、low-variance 警告、原�
 
 ### 10.2 Scientific gate
 
-- 候選模型相較 Persistence 的 primary MAE 建議至少改善 5%，且 paired 95% CI 的改善方向不跨 0。
+- 候選模型相較 Direct Ridge 的 primary MAE 建議至少改善 5%，且 paired 95% CI 的改善方向不跨 0。
 - 候選模型相較 Ridge + History 若無實質改善，應優先較簡單模型；「實質」建議用 validation 先凍結，例如 MAE 相對改善 3%。
 - 在至少 4/5 seeds 與多數設備／fold 保持改善；若只在單一設備有效，結論限定於該設備。
 - Risk gate 建議 event recall ≥ 0.90，並將 precision／false alarms per day 與 median lead time 一起達標；誤報與 lead-time 上限由維護團隊先定義。
@@ -328,9 +322,9 @@ Runtime v2 同時報 `target_distribution.stddev_c`、low-variance 警告、原�
 3. 產生 `dataset_manifest.json`：檔案 hash、時間範圍、設備、單位、校正版本、排除理由。
 4. 先建立每設備 time split 與 gap，再 fit 任何 preprocessing；輸出 `split_manifest.parquet/csv`。
 5. 由每個 split 獨立建立 strict-grid windows；儲存 `sample_id, device_id, origin_time, split` 與排除原因。
-6. 跑 M0/M1/M2/M3 smoke test；確認 legacy 與 strict-grid 指標名稱不混用。
-7. 在 development period 跑 nested chronological tuning：inner train 與 validation 間仍保留 horizon gap；Ridge 選 alpha、XGBoost 選 tree count、PyTorch 選停止 epoch。每 trial 留存 config、validation 指標、時間與狀態。
-8. 凍結每模型選定設定後，用 locked-test gap 之前的完整 development period（包含原 train／validation）重新初始化與擬合；scaler 也只在此範圍重算。再以五個 seeds 完成 M4–M10。
+6. 跑 Direct Ridge 與 Ridge + History smoke test；確認 strict-grid 指標與輸入形狀正確。
+7. 在 development period 跑 nested chronological tuning：inner train 與 validation 間仍保留 horizon gap；Ridge 選 alpha、PyTorch 選停止 epoch。每 trial 留存 config、validation 指標、時間與狀態。
+8. 凍結每模型選定設定後，用 locked-test gap 之前的完整 development period（包含原 train／validation）重新初始化與擬合；scaler 也只在此範圍重算。再以五個 seeds 完成 DLinear、LSTM、TCN 與 PatchTST。
 9. 執行 E2 ablation、E3 horizon、E4 leave-one-device-out；全部仍不讀 locked test。
 10. 凍結 primary analysis 與 gates，對 locked test 執行一次批次推論；不得依 test 結果回到第 7 步重選設定。
 11. 以 block bootstrap／paired tests 產生 CI 與校正後結果；建立 accuracy–latency–memory Pareto 圖。
@@ -379,15 +373,12 @@ split:
 
 models:
   required:
-    - persistence
-    - ridge_snapshot
-    - ridge_history
-    - xgboost
-    - gru
+    - ridge_direct
+    - ridge_history_trend
+    - dlinear
     - lstm
     - tcn
-    - dlinear
-  optional: [transformer, patchtst]
+    - patchtst
   tuning_trials_per_model: 30
   early_stopping_patience: 20
   max_epochs: 300
@@ -407,7 +398,7 @@ statistics:
   multiple_comparison_correction: holm
 
 provisional_gates:
-  mae_improvement_vs_persistence_percent: 5
+  mae_improvement_vs_ridge_direct_percent: 5
   risk_event_recall_min: 0.90
   edge_p95_latency_ms_max: 50
   artifact_size_mib_max: 10
@@ -433,7 +424,7 @@ curl -X POST http://127.0.0.1:8000/api/research/experiments \
     "history_minutes": 60,
     "horizons_minutes": [5, 10, 15, 20, 25, 30],
     "threshold_c": 35.0,
-    "model_names": ["persistence", "ridge_direct", "ridge_history_trend"],
+    "model_names": ["ridge_direct", "ridge_history_trend", "dlinear", "lstm", "tcn", "patchtst"],
     "include_ablations": true,
     "sampling_minutes": 5,
     "train_fraction": 0.60,
@@ -451,7 +442,7 @@ curl -X POST http://127.0.0.1:8000/api/research/experiments \
 curl http://127.0.0.1:8000/api/research/experiments/<32-hex-experiment-id>
 ```
 
-Compose 預設啟用七個較重模型；若 `.env` 曾指定 `BACKEND_REQUIREMENTS_FILE=requirements.txt`，須移除該 override 或改回 `requirements-research.txt` 後重建 backend image。`GET /api/research/config` 回傳的 model catalog 是最終判斷依據；某模型顯示 unavailable 時，實驗會保留 reason，而不是偽造空指標。
+Compose 預設啟用四個 PyTorch 模型；若 `.env` 曾指定 `BACKEND_REQUIREMENTS_FILE=requirements.txt`，須移除該 override 或改回 `requirements-research.txt` 後重建 backend image。`GET /api/research/config` 回傳的六模型 catalog 是最終判斷依據；某模型顯示 unavailable 時，實驗會保留 reason，而不是偽造空指標。
 
 ## 13. 必要輸出與命名
 
@@ -485,20 +476,19 @@ runs/<run_id>/
 
 | Model | Test devices | Test windows | MAE ↓ | RMSE ↓ | +30 MAE ↓ | PR-AUC ↑ | Event recall ↑ | Lead time ↑ | p95 ms ↓ | MiB ↓ |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Persistence | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 |
-| Ridge Snapshot | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 |
-| Ridge + History | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 |
-| XGBoost | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 |
-| GRU | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 |
+| Direct Ridge | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 |
+| Ridge + History/Trend | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 |
+| DLinear | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 |
 | LSTM | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 |
 | TCN | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 |
+| PatchTST | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 | 待實驗 |
 
 ## 14. 論文章節對照
 
 | 論文章節 | 本研究文件／artifact |
 | --- | --- |
 | 第 1 章 緒論 | 研究定位、RQ1–RQ7、研究貢獻與限制 |
-| 第 2 章 文獻探討 | Persistence／Ridge、樹模型、RNN、TCN、multi-horizon、edge AI、predictive maintenance |
+| 第 2 章 文獻探討 | Ridge、DLinear、LSTM、TCN、PatchTST、multi-horizon、edge AI、predictive maintenance |
 | 第 3 章 研究方法 | 本文件第 3–10 節；資料部分引用 `DATASET_PROTOCOL.md` |
 | 第 4 章 系統設計與實作 | `SYSTEM_ARCHITECTURE.md`、API／model artifact／risk engine |
 | 第 5 章 實驗設計 | E0–E6、frozen config、split manifest、硬體環境 |

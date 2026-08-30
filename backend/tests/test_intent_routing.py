@@ -53,7 +53,7 @@ class IntentRoutingTests(unittest.TestCase):
     def test_extracts_all_added_sequence_model_names(self):
         for label, identifier in (
             ("DLinear", "dlinear"),
-            ("Transformer", "transformer"),
+            ("LSTM", "lstm"),
             ("PatchTST", "patchtst"),
         ):
             with self.subTest(model=label):

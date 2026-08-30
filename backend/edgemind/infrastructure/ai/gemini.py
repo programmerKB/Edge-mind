@@ -76,7 +76,10 @@ class GeminiModelGateway:
         prompt = (
             f"原始問題：{message}\n\n"
             "以下是後端工具取得的真實資料。請只根據這些資料，以繁體中文"
-            "直接回答原始問題並提供具體建議；不要聲稱使用未列出的資料。\n"
+            "直接回答原始問題並提供具體建議；不要聲稱使用未列出的資料。"
+            "若即時預測的 truth_status 為 pending，必須說明這只是未來目標"
+            "尚未到達；模型誤差應引用 historical_evaluation.locked_test，"
+            "不得誤稱整個模型沒有誤差資料。\n"
             + json.dumps(tool_results, ensure_ascii=False)
         )
         response = await self._generate(

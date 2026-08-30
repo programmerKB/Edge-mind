@@ -7,6 +7,7 @@ import {
   getResearchConfig,
   getResearchExperiment,
 } from '../services/researchApi.js';
+import { DEFAULT_FORECAST_MODEL_ID } from '../models/forecastModel.js';
 
 const DEFAULT_HORIZONS = [5, 10, 15, 20, 25, 30];
 const TERMINAL_STATUSES = new Set(['completed', 'complete', 'succeeded', 'failed', 'error', 'cancelled']);
@@ -30,7 +31,7 @@ function configDefaults(config) {
   return {
     trainingMotorId: defaults.training_motor_id || firstMotor,
     evaluationMotorId: defaults.evaluation_motor_id || defaults.inference_motor_id || secondMotor,
-    forecastModel: defaults.forecast_model || 'ridge_history_trend',
+    forecastModel: defaults.forecast_model || DEFAULT_FORECAST_MODEL_ID,
     historyMinutes: defaults.history_minutes ?? 60,
     horizonsMinutes: [...rawHorizons].map(Number).filter(Number.isFinite),
     thresholdC: defaults.threshold_c ?? defaults.temperature_threshold_c ?? 35,

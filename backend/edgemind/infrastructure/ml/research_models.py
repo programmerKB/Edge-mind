@@ -1,6 +1,6 @@
-"""Executable tree, recurrent, convolutional, and Transformer research adapters.
+"""Executable recurrent, convolutional, linear, and patch research adapters.
 
-Imports of NumPy, XGBoost, and PyTorch are intentionally lazy.  The production
+Imports of NumPy and PyTorch are intentionally lazy.  The production
 edge image can therefore keep running the dependency-free baselines, while a
 research environment installed from ``requirements-research.txt`` activates
 the heavier comparison models automatically.
@@ -8,8 +8,6 @@ the heavier comparison models automatically.
 
 from __future__ import annotations
 
-import base64
-import json
 from typing import Any, Sequence
 
 from edgemind.domain.research import (
@@ -43,173 +41,6 @@ def _project_history(
     ]
 
 
-class XGBoostSequenceAdapter:
-    """Fit one deterministic boosted-tree regressor per forecast horizon."""
-
-    representation = "flattened_history_direct_multioutput"
-
-    def __init__(self, config: ResearchConfig, feature_names: tuple[str, ...]):
-        import numpy as np
-        import xgboost as xgb
-
-        self.config = config
-        self.feature_names = tuple(feature_names)
-        self._indexes = _feature_indexes(self.feature_names)
-        self._np = np
-        self._xgb = xgb
-        self._models: list[Any] = []
-        self._best_iterations: list[int] = []
-        self._selection_validation_mae: float | None = None
-        self._used_early_stopping = False
-
-    def _x(self, examples: Sequence[SequenceExample]):
-        return self._np.asarray(
-            [
-                [value for row in _project_history(example, self._indexes) for value in row]
-                for example in examples
-            ],
-            dtype=self._np.float32,
-        )
-
-    def _y(self, examples: Sequence[SequenceExample]):
-        return self._np.asarray(
-            [
-                [float(value) - example.current_temperature for value in example.targets]
-                for example in examples
-            ],
-            dtype=self._np.float32,
-        )
-
-    def _new_model(self, n_estimators: int, *, early_stopping: bool):
-        arguments = {
-            "objective": "reg:absoluteerror",
-            "eval_metric": "mae",
-            "n_estimators": int(n_estimators),
-            "max_depth": 4,
-            "learning_rate": 0.04,
-            "min_child_weight": 2,
-            "subsample": 0.85,
-            "colsample_bytree": 0.85,
-            "reg_alpha": 0.0,
-            "reg_lambda": 1.0,
-            "random_state": self.config.random_seed,
-            "n_jobs": 1,
-            "tree_method": "hist",
-            "verbosity": 0,
-        }
-        if early_stopping:
-            arguments["early_stopping_rounds"] = 24
-        return self._xgb.XGBRegressor(**arguments)
-
-    def fit(self, examples: Sequence[SequenceExample]) -> None:
-        if not examples:
-            raise ResearchError("XGBoost requires non-empty training examples")
-        x = self._x(examples)
-        y = self._y(examples)
-        self._models = []
-        self._best_iterations = [239] * y.shape[1]
-        for output_index in range(y.shape[1]):
-            model = self._new_model(240, early_stopping=False)
-            model.fit(x, y[:, output_index], verbose=False)
-            self._models.append(model)
-
-    def fit_with_validation(
-        self,
-        examples: Sequence[SequenceExample],
-        validation: Sequence[SequenceExample],
-    ) -> None:
-        if not examples or not validation:
-            self.fit(examples)
-            return
-        x, y = self._x(examples), self._y(examples)
-        validation_x, validation_y = self._x(validation), self._y(validation)
-        self._models = []
-        self._best_iterations = []
-        for output_index in range(y.shape[1]):
-            model = self._new_model(600, early_stopping=True)
-            model.fit(
-                x,
-                y[:, output_index],
-                eval_set=[(validation_x, validation_y[:, output_index])],
-                verbose=False,
-            )
-            best_iteration = int(getattr(model, "best_iteration", 599))
-            self._best_iterations.append(best_iteration)
-            self._models.append(model)
-        self._used_early_stopping = True
-        errors = [
-            abs(predicted - actual)
-            for example in validation
-            for predicted, actual in zip(self.predict(example), example.targets)
-        ]
-        self._selection_validation_mae = float(self._np.mean(errors))
-
-    def refit_on_development(self, examples: Sequence[SequenceExample]) -> None:
-        if not examples:
-            raise ResearchError("XGBoost requires development examples")
-        if not self._best_iterations:
-            self.fit(examples)
-            return
-        x, y = self._x(examples), self._y(examples)
-        selected_iterations = tuple(self._best_iterations)
-        self._models = []
-        for output_index, best_iteration in enumerate(selected_iterations):
-            model = self._new_model(best_iteration + 1, early_stopping=False)
-            model.fit(x, y[:, output_index], verbose=False)
-            self._models.append(model)
-
-    def predict(self, example: SequenceExample) -> tuple[float, ...]:
-        if not self._models:
-            raise ResearchError("XGBoost adapter has not been fitted")
-        x = self._x((example,))
-        return tuple(
-            example.current_temperature + float(model.predict(x)[0])
-            for model in self._models
-        )
-
-    def state_dict(self) -> dict[str, Any]:
-        if not self._models:
-            raise ResearchError("XGBoost adapter has not been fitted")
-        return {
-            "algorithm": "xgboost_one_regressor_per_horizon",
-            "seed": self.config.random_seed,
-            "feature_names": list(self.feature_names),
-            "horizons_minutes": list(self.config.horizons_minutes),
-            "target_transform": "delta_from_current_temperature",
-            "best_iterations_zero_based": list(self._best_iterations),
-            "selection_validation_mae": self._selection_validation_mae,
-            "boosters_base64_ubj": [
-                base64.b64encode(
-                    bytes(model.get_booster().save_raw(raw_format="ubj"))
-                ).decode("ascii")
-                for model in self._models
-            ],
-        }
-
-    def training_metadata(self) -> dict[str, Any]:
-        return {
-            "selection_method": (
-                "validation_mae_early_stopping"
-                if self._used_early_stopping
-                else "fixed_preregistered_tree_count"
-            ),
-            "selected_tree_counts": [value + 1 for value in self._best_iterations],
-            "selection_validation_mae": self._selection_validation_mae,
-            "target_transform": "delta_from_current_temperature",
-        }
-
-    def parameter_count(self) -> int:
-        """Use total tree-node count as the tree model's complexity measure."""
-        def count_nodes(node: dict) -> int:
-            return 1 + sum(count_nodes(child) for child in node.get("children", ()))
-
-        return sum(
-            count_nodes(json.loads(tree))
-            for model in self._models
-            for tree in model.get_booster().get_dump(dump_format="json")
-        )
-
-
 class TorchSequenceAdapter:
     """Shared deterministic loop for all PyTorch sequence architectures."""
 
@@ -228,11 +59,9 @@ class TorchSequenceAdapter:
         self.feature_names = tuple(feature_names)
         self.architecture = architecture
         self.representation = {
-            "gru": "recurrent_sequence_to_direct_multi_horizon",
             "lstm": "recurrent_sequence_to_direct_multi_horizon",
             "tcn": "causal_convolution_to_direct_multi_horizon",
             "dlinear": "decomposition_linear_to_direct_multi_horizon",
-            "transformer": "transformer_encoder_to_direct_multi_horizon",
             "patchtst": "channel_independent_patches_to_direct_multi_horizon",
         }.get(architecture, "sequence_to_direct_multi_horizon")
         self._indexes = _feature_indexes(self.feature_names)
@@ -255,11 +84,10 @@ class TorchSequenceAdapter:
         history_steps = self.config.history_steps
         architecture = self.architecture
 
-        class RecurrentNetwork(nn.Module):
+        class LSTMNetwork(nn.Module):
             def __init__(self):
                 super().__init__()
-                recurrent = nn.GRU if architecture == "gru" else nn.LSTM
-                self.encoder = recurrent(input_size, 32, batch_first=True)
+                self.encoder = nn.LSTM(input_size, 32, batch_first=True)
                 self.head = nn.Sequential(nn.LayerNorm(32), nn.Linear(32, output_size))
 
             def forward(self, values):
@@ -304,32 +132,6 @@ class TorchSequenceAdapter:
                 seasonal = channels - trend
                 per_feature = self.seasonal(seasonal) + self.trend(trend)
                 return self.feature_projection(per_feature.transpose(1, 2)).squeeze(-1)
-
-        class TransformerNetwork(nn.Module):
-            def __init__(self):
-                super().__init__()
-                width = 32
-                self.input_projection = nn.Linear(input_size, width)
-                self.position = nn.Parameter(torch.zeros(1, history_steps, width))
-                layer = nn.TransformerEncoderLayer(
-                    d_model=width,
-                    nhead=4,
-                    dim_feedforward=64,
-                    dropout=0.0,
-                    activation="gelu",
-                    batch_first=True,
-                    norm_first=True,
-                )
-                self.encoder = nn.TransformerEncoder(
-                    layer,
-                    num_layers=2,
-                    enable_nested_tensor=False,
-                )
-                self.head = nn.Sequential(nn.LayerNorm(width), nn.Linear(width, output_size))
-
-            def forward(self, values):
-                encoded = self.input_projection(values) + self.position
-                return self.head(self.encoder(encoded).mean(dim=1))
 
         class PatchTSTNetwork(nn.Module):
             """Channel-independent patch Transformer adapted to a 12-step input."""
@@ -378,11 +180,9 @@ class TorchSequenceAdapter:
                 return self.head(encoded.reshape(batch, channels * encoded.shape[-1]))
 
         networks = {
-            "gru": RecurrentNetwork,
-            "lstm": RecurrentNetwork,
+            "lstm": LSTMNetwork,
             "tcn": TemporalConvolutionNetwork,
             "dlinear": DLinearNetwork,
-            "transformer": TransformerNetwork,
             "patchtst": PatchTSTNetwork,
         }
         try:
@@ -577,25 +377,10 @@ def _torch_factory(architecture: str):
 
 def register_optional_research_models(registry: ModelRegistry) -> ModelRegistry:
     """Replace placeholder entries with lazy, dependency-audited adapters."""
-    registry.register(
-        "xgboost",
-        lambda config, features: XGBoostSequenceAdapter(config, features),
-        display_name="XGBoost",
-        description="Gradient-boosted trees over the same flattened 60-minute history.",
-        required_modules=("numpy", "sklearn", "xgboost"),
-        suggested_dependencies=(
-            "numpy==2.4.6",
-            "scikit-learn==1.9.0",
-            "xgboost-cpu==3.2.0",
-        ),
-        replace=True,
-    )
     for name, label in (
-        ("gru", "GRU"),
+        ("dlinear", "DLinear"),
         ("lstm", "LSTM"),
         ("tcn", "TCN"),
-        ("dlinear", "DLinear"),
-        ("transformer", "Transformer"),
         ("patchtst", "PatchTST"),
     ):
         registry.register(
@@ -614,6 +399,5 @@ def register_optional_research_models(registry: ModelRegistry) -> ModelRegistry:
 
 __all__ = [
     "TorchSequenceAdapter",
-    "XGBoostSequenceAdapter",
     "register_optional_research_models",
 ]

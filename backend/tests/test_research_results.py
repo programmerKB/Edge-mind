@@ -12,6 +12,7 @@ from edgemind.infrastructure.reporting.research_results import (
     save_research_experiment,
     save_research_forecast,
 )
+from edgemind.infrastructure.reporting.artifacts import resolve_chart_artifact
 
 
 class ResearchResultTests(unittest.TestCase):
@@ -23,7 +24,7 @@ class ResearchResultTests(unittest.TestCase):
             "experiment_id": experiment_id,
             "status": "completed",
             "models": {
-                "persistence": {
+                "ridge_direct": {
                     "status": "completed",
                     "test": {
                         "overall": {"mae": 0.5},
@@ -76,7 +77,7 @@ class ResearchResultTests(unittest.TestCase):
             },
             "statistical_comparisons": [
                 {
-                    "comparison": "ridge_vs_persistence",
+                    "comparison": "ridge_history_trend_vs_ridge_direct",
                     "status": "available",
                     "candidate_minus_reference": -0.1,
                 }
@@ -103,7 +104,7 @@ class ResearchResultTests(unittest.TestCase):
             self.assertEqual(loaded["experiment_id"], experiment_id)
             self.assertNotIn(
                 "prediction_records",
-                loaded["models"]["persistence"]["test"],
+                loaded["models"]["ridge_direct"]["test"],
             )
             self.assertNotIn("split_manifest_records", loaded["dataset"])
             with Path(artifacts["horizon_metrics_csv"]).open(
@@ -115,7 +116,7 @@ class ResearchResultTests(unittest.TestCase):
                 encoding="utf-8-sig", newline=""
             ) as source:
                 prediction_rows = list(csv.DictReader(source))
-            self.assertEqual(prediction_rows[0]["model"], "persistence")
+            self.assertEqual(prediction_rows[0]["model"], "ridge_direct")
             self.assertEqual(prediction_rows[0]["split"], "test")
             self.assertEqual(prediction_rows[0]["sample_id"], "sample-1")
             with Path(artifacts["split_manifest_csv"]).open(
@@ -140,6 +141,47 @@ class ResearchResultTests(unittest.TestCase):
                 {
                     "forecast_id": forecast_id,
                     "truth_status": "pending",
+                    "motor_id": "MOTOR-A",
+                    "model": {
+                        "name": "ridge_direct",
+                        "display_name": "Direct Ridge",
+                    },
+                    "source": {"current_temperature_c": 31.8},
+                    "risk": {"threshold_c": 35.0},
+                    "historical_evaluation": {
+                        "locked_test": {
+                            "chart_series": {
+                                "horizon_minutes": 5,
+                                "points": [
+                                    {
+                                        "target_time": "2026-01-01T00:05:00+00:00",
+                                        "predicted_temperature_c": 31.8,
+                                        "actual_temperature_c": 32.0,
+                                    },
+                                    {
+                                        "target_time": "2026-01-01T00:10:00+00:00",
+                                        "predicted_temperature_c": 32.0,
+                                        "actual_temperature_c": 32.2,
+                                    },
+                                    {
+                                        "target_time": "2026-01-01T00:15:00+00:00",
+                                        "predicted_temperature_c": 32.1,
+                                        "actual_temperature_c": 32.3,
+                                    },
+                                ],
+                            },
+                            "latest_forecast": {
+                                "trajectory": [
+                                    {
+                                        "horizon_minutes": 5,
+                                        "predicted_temperature_c": 32.0,
+                                        "actual_temperature_c": 32.2,
+                                    }
+                                ]
+                            },
+                            "by_horizon": {"5": {"mae": 0.2}},
+                        }
+                    },
                     "trajectory": [
                         {
                             "horizon_minutes": 5,
@@ -153,8 +195,26 @@ class ResearchResultTests(unittest.TestCase):
 
             self.assertIn("research_forecasts", saved["artifacts"]["run_directory"])
             self.assertTrue(Path(saved["artifacts"]["result_json"]).is_file())
+            self.assertEqual(len(saved["artifacts"]["charts"]), 3)
+            self.assertTrue(
+                all(Path(chart).is_file() for chart in saved["artifacts"]["charts"])
+            )
+            historical_svg = Path(saved["artifacts"]["charts"][1]).read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("+5 分鐘", historical_svg)
+            self.assertEqual(historical_svg.count("<circle"), 6)
+            self.assertEqual(len(saved["attachments"]), 3)
+            relative_chart = saved["attachments"][0]["url"].removeprefix(
+                "/api/report-artifacts/"
+            )
+            self.assertEqual(
+                resolve_chart_artifact(relative_chart, root),
+                Path(saved["artifacts"]["charts"][0]).resolve(),
+            )
             loaded = get_research_forecast(forecast_id, root)
             self.assertEqual(loaded["truth_status"], "pending")
+            self.assertEqual(loaded["attachments"], saved["attachments"])
             self.assertIsNone(get_research_forecast("../escape", root))
 
 

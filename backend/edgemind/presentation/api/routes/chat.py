@@ -17,7 +17,10 @@ def create_router(agent: AgentService) -> APIRouter:
 
         async def encoded_events():
             """Encode each transport-neutral Agent event as an SSE frame."""
-            async for event in agent.stream(request.message):
+            async for event in agent.stream(
+                request.message,
+                model_name=request.model_name,
+            ):
                 yield encode_sse_event(event, ensure_ascii)
 
         return StreamingResponse(

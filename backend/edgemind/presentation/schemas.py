@@ -1,15 +1,27 @@
 """Pydantic request contracts owned by the HTTP presentation layer."""
 
-from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+
+
+ResearchModelName = Literal[
+    "ridge_direct",
+    "ridge_history_trend",
+    "dlinear",
+    "lstm",
+    "tcn",
+    "patchtst",
+]
 
 
 class ChatRequest(BaseModel):
     """Validated user input accepted by both chat streaming endpoints."""
 
+    model_config = ConfigDict(extra="forbid")
+
     message: str = Field(min_length=1, max_length=10_000)
+    model_name: ResearchModelName | None = None
 
 
 class SensorReadingRequest(BaseModel):
@@ -21,7 +33,7 @@ class SensorReadingRequest(BaseModel):
     accel_x: float
     accel_y: float
     accel_z: float
-    recorded_at: datetime | None = None
+    recorded_at: AwareDatetime | None = None
     status: str = Field(default="normal", max_length=50)
 
 
@@ -39,21 +51,17 @@ class ResearchExperimentRequest(BaseModel):
         max_length=12,
     )
     threshold_c: float = Field(default=35.0, ge=20, le=120, allow_inf_nan=False)
-    model_names: list[str] = Field(
+    model_names: list[ResearchModelName] = Field(
         default_factory=lambda: [
-            "persistence",
             "ridge_direct",
             "ridge_history_trend",
-            "xgboost",
-            "gru",
+            "dlinear",
             "lstm",
             "tcn",
-            "dlinear",
-            "transformer",
             "patchtst",
         ],
         min_length=1,
-        max_length=10,
+        max_length=6,
     )
     include_ablations: bool = True
     sampling_minutes: int = Field(default=5, ge=1, le=60)
@@ -71,7 +79,7 @@ class ResearchForecastRequest(BaseModel):
 
     motor_id: str = Field(min_length=1, max_length=100)
     training_motor_id: str | None = Field(default=None, max_length=100)
-    model_name: str = Field(default="ridge_history_trend", min_length=1, max_length=50)
+    model_name: ResearchModelName = "ridge_history_trend"
     history_minutes: int = Field(default=60, ge=10, le=24 * 60)
     horizons_minutes: list[Annotated[int, Field(ge=5, le=60)]] = Field(
         default_factory=lambda: [5, 10, 15, 20, 25, 30],

@@ -11,13 +11,9 @@ from typing import Any
 DEVICE_ID = r"(?=[A-Za-z0-9._-]*[A-Za-z])[A-Za-z0-9][A-Za-z0-9._-]*"
 MODEL_IDENTIFIERS = {
     "ridge",
-    "xgboost",
-    "gru",
     "lstm",
     "tcn",
     "dlinear",
-    "persistence",
-    "transformer",
     "patchtst",
 }
 
@@ -80,15 +76,11 @@ def temperature_trajectory_arguments(message: str) -> dict[str, Any] | None:
         return None
     model_aliases = (
         (r"patchtst", "patchtst"),
-        (r"\btransformer\b", "transformer"),
         (r"dlinear", "dlinear"),
-        (r"xgboost", "xgboost"),
-        (r"\bgru\b", "gru"),
         (r"\blstm\b", "lstm"),
         (r"\btcn\b", "tcn"),
         (r"ridge\s*\+?\s*(?:history|historical|trend)", "ridge_history_trend"),
         (r"direct\s*ridge", "ridge_direct"),
-        (r"persistence", "persistence"),
     )
     for pattern, model_name in model_aliases:
         if re.search(pattern, compact, flags=re.IGNORECASE):

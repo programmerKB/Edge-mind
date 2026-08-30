@@ -175,7 +175,7 @@ dataset_version|device_id|session_id|origin_time_utc|L12|H6|feature_schema_v1
 ### 8.2 History features
 
 - Sequence model：保留 shape `[12, 5]`。
-- Ridge History／XGBoost：flatten 60 個 lag，再從 predictor history 計算每個 feature 的 mean、std、min、max、last-first、least-squares slope。
+- Ridge + History/Trend：flatten 60 個 lag，再從 predictor history 計算每個 feature 的 mean、std、min、max、last-first、least-squares slope。
 - 所有 slope 的時間單位固定為每分鐘或每 5 分鐘 step，欄名寫明。
 - 禁止以 `t+5...t+30` 計算 rolling mean 或 threshold flag。
 
@@ -183,7 +183,7 @@ dataset_version|device_id|session_id|origin_time_utc|L12|H6|feature_schema_v1
 
 - 每一 outer fold 只用 train rows fit scaler，套到 validation／test。
 - 跨設備 zero-shot 只用 source-device train fit global scaler；不得讀 held-out device 分布。
-- 溫度絕對值對 risk 很重要；學習模型以 `T(t+h)-T(t)` 作較平穩的訓練目標，推論時加回 origin 溫度，所有指標仍以絕對 °C 真值計算。Persistence 保持原始定義。
+- 溫度絕對值對 risk 很重要；六種模型均以 `T(t+h)-T(t)` 作較平穩的訓練目標，推論時加回 origin 溫度，所有指標仍以絕對 °C 真值計算。
 - 保存 scaler 參數、fit sample hash 與 feature order；推論遇到 schema/order 不一致必須 fail closed。
 
 ## 9. Train／validation／test 與 gap
