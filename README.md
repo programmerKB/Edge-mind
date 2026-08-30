@@ -222,29 +222,38 @@ docker compose up -d backend frontend
 ## 系統架構
 
 ```mermaid
-flowchart LR
-    UI[React 診斷聊天 / 研究工作台] -->|SSE / REST| P[Presentation]
-    P --> A[Application Use Cases]
-    A --> D[Domain: Legacy Forecast + Research Engine]
-    I[Infrastructure Adapters] -. implements ports .-> A
-    I --> DB[(PostgreSQL)]
-    I --> G[Gemini]
-    I --> ML[PyTorch optional adapters]
-    I --> FS[CSV / SVG / Research JSON]
-    B[Bootstrap] --> P
-    B --> A
-    B --> I
+flowchart TB
+    UI["React Web UI<br/>診斷聊天 · 研究工作台"]
+
+    subgraph CORE["Backend Core"]
+        direction LR
+        API["Presentation<br/>FastAPI Routes · Pydantic · SSE"]
+        APP["Application<br/>Use Cases · Owned Ports · Model Registry"]
+        DOMAIN["Domain<br/>Forecasting · Evaluation · Risk Rules"]
+
+        API -->|validated request| APP
+        APP -->|pure calculations| DOMAIN
+    end
+
+    subgraph INFRA["Infrastructure Adapters"]
+        direction LR
+        PERSIST[("Persistence<br/>SQLAlchemy · PostgreSQL")]
+        GEMINI["Gemini Gateway<br/>Tool Calls · Summary"]
+        ML["Optional PyTorch Models<br/>DLinear · LSTM · TCN · PatchTST"]
+        REPORT[("Run Artifacts<br/>JSON · CSV · SVG")]
+    end
+
+    BOOT(["Bootstrap<br/>Composition Root"])
+
+    UI -->|REST / SSE| API
+    APP -->|Repository / UoW port| PERSIST
+    APP -->|Agent-model port| GEMINI
+    APP -->|registered adapters| ML
+    APP -->|Report gateways| REPORT
+    BOOT -. constructs and injects at startup .-> APP
 ```
 
-後端不是只依資料夾分類，而是以 application-owned ports 保持單向依賴：
-
-```text
-presentation ─→ application ─→ domain
-                       ↑
-infrastructure ────────┘
-
-bootstrap 是唯一可以同時組裝所有層的 composition root
-```
+實線表示一次請求的主要呼叫／資料流，虛線只表示啟動時的組裝。核心依賴方向維持 `presentation → application → domain`；Application 只認識自己定義的 ports，具體的資料庫、Gemini 與報表實作位於 Infrastructure。Bootstrap 是唯一可同時看見並組裝所有層的 composition root。
 
 | 分層 | 責任 | 禁止事項 |
 | --- | --- | --- |
