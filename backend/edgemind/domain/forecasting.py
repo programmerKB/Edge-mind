@@ -205,14 +205,7 @@ def predict_with_payload(payload: dict, features: Sequence[float]) -> float:
 
 
 def train_temperature_model(examples: Sequence[TrainingExample]) -> dict:
-    """Purged time-split, validate, then refit a serializable Ridge model.
-
-    The input and target timestamps of adjacent examples overlap on regularly
-    sampled data.  A plain chronological 80/20 split would therefore allow a
-    training label from the future of the first validation origin.  Keep the
-    validation tail fixed, but purge every earlier example whose target does
-    not end strictly before that origin.
-    """
+    """Time-split, validate, then refit a compact serializable Ridge model."""
     training_started = time.perf_counter()
     if len(examples) < MIN_TRAINING_SAMPLES:
         raise ForecastError(
@@ -222,19 +215,8 @@ def train_temperature_model(examples: Sequence[TrainingExample]) -> dict:
 
     ordered = sorted(examples, key=lambda item: _as_utc_timestamp(item.source_time))
     validation_size = max(2, int(round(len(ordered) * 0.2)))
+    training = ordered[:-validation_size]
     validation = ordered[-validation_size:]
-    validation_start = _as_utc_timestamp(validation[0].source_time)
-    training_candidates = ordered[:-validation_size]
-    training = [
-        example
-        for example in training_candidates
-        if _as_utc_timestamp(example.target_time) < validation_start
-    ]
-    purged_count = len(training_candidates) - len(training)
-    if len(training) < 2:
-        raise ForecastError(
-            "時間切分與 30 分鐘 purge 後的訓練樣本不足，請增加歷史資料"
-        )
     validation_model = _fit_parameters(training)
     validation_predictions = [
         predict_with_payload(validation_model, example.features)
@@ -257,16 +239,6 @@ def train_temperature_model(examples: Sequence[TrainingExample]) -> dict:
             "target_tolerance_minutes": TARGET_TOLERANCE_MINUTES,
             "sample_count": len(ordered),
             "validation_sample_count": len(validation),
-            "validation_training_sample_count": len(training),
-            "validation_purged_sample_count": purged_count,
-            "validation_strategy": "chronological_tail_with_target_time_purge",
-            "validation_first_source_time": validation[0].source_time.isoformat(),
-            "validation_last_source_time": validation[-1].source_time.isoformat(),
-            "validation_training_last_target_time": max(
-                training,
-                key=lambda example: _as_utc_timestamp(example.target_time),
-            ).target_time.isoformat(),
-            "validation_targets_end_before_validation_sources": True,
             "mae": validation_metrics["mae"],
             "rmse": validation_metrics["rmse"],
             "validation_metrics": validation_metrics,

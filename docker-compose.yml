@@ -1,78 +1,46 @@
+#version: '3.8'
+
 services:
   db:
     image: postgres:16-alpine
-    restart: unless-stopped
+    container_name: agent-postgres
+    restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 10s
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "3"
 
   backend:
-    build:
-      context: ./backend
-      args:
-        REQUIREMENTS_FILE: ${BACKEND_REQUIREMENTS_FILE:-requirements-research.txt}
-    restart: unless-stopped
+    build: ./backend
+    container_name: agent-fastapi
+    restart: always
     ports:
-      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+      - "8000:8000"
     volumes:
-      - research_outputs:/app/outputs
+      - ./backend:/app
     env_file:
       - .env
-    environment:
-      PYTHONUNBUFFERED: "1"
-      PYTHONDONTWRITEBYTECODE: "1"
-      OMP_NUM_THREADS: "1"
-      MKL_NUM_THREADS: "1"
-      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
-      INFERENCE_OUTPUT_DIR: ${INFERENCE_OUTPUT_DIR:-/app/outputs}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+    # Bind-mounted development code uses reload; the image default omits it.
+    command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
-      db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=3)"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "3"
+      - db
 
   frontend:
-    build:
-      context: ./frontend
-    restart: unless-stopped
+    build: ./frontend
+    container_name: agent-frontend
+    restart: always
     ports:
-      - "${WEB_PORT:-5173}:80"
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # 保護容器內的套件不被外部覆寫
+    environment:
+      VITE_PROXY_TARGET: http://backend:8000
     depends_on:
-      backend:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "3"
-
+      - backend
 volumes:
   postgres_data:
-  research_outputs:

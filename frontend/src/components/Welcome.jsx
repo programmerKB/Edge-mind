@@ -38,7 +38,7 @@ export default function Welcome({ onSuggestion }) {
       <p className="eyebrow"><Sparkles size={14} /> AI 設備診斷助手</p>
       <h1>今天想診斷什麼設備？</h1>
       <p className="welcome-copy">
-        我可以讀取邊緣感測資料、分析異常原因，並提供具體的維護建議。
+        我可以讀取邊緣感測資料、分析異常原因，並依上方選定的 Ridge 推論方式提供維護建議。
       </p>
       <div className="suggestion-grid">
         {SUGGESTIONS.map(({ icon: Icon, title, description, prompt }) => (

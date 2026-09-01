@@ -2,9 +2,6 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.venv/
-venv/
 outputs/
-generated_datasets/
 .env
 .git/

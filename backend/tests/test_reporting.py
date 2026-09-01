@@ -14,7 +14,6 @@ from edgemind.domain.forecasting import (
     train_temperature_model,
 )
 from edgemind.domain.demo_data import (
-    DEMO_INFERENCE_READING_COUNT,
     build_demo_inference_readings,
     build_demo_readings,
 )
@@ -73,7 +72,7 @@ class ReportingTests(unittest.TestCase):
             files = report["files"]
             self.assertEqual(
                 report["completed_evaluation_samples"],
-                DEMO_INFERENCE_READING_COUNT - 5,
+                len(inference) - 5,
             )
             self.assertTrue(Path(files["predictions_csv"]).is_file())
             self.assertTrue(Path(files["baseline_csv"]).is_file())

@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import json
 import time
-from typing import Callable, Sequence
+from typing import Callable
 
 from edgemind.application.forecasts import ForecastService
 from edgemind.application.ports import UnitOfWork
-from edgemind.application.research import ResearchService
+from edgemind.application.ridge_lab import RidgeLabService
 from edgemind.application.sensors import SensorService
 from edgemind.domain.forecasting import ForecastError
-from edgemind.domain.research import ResearchError
+from edgemind.domain.ridge_experiments import DIRECT_MODEL
 
 
 class DiagnosticToolService:
@@ -21,13 +20,13 @@ class DiagnosticToolService:
         self,
         uow_factory: Callable[[], UnitOfWork],
         forecasts: ForecastService,
-        research: ResearchService,
+        ridge_lab: RidgeLabService,
         sensors: SensorService,
     ):
         """Bind use cases to the unit-of-work factory used by Agent tools."""
         self._uow_factory = uow_factory
         self._forecasts = forecasts
-        self._research = research
+        self._ridge_lab = ridge_lab
         self._sensors = sensors
 
     def _motor_status_payload(self, motor_id: str) -> dict:
@@ -42,17 +41,32 @@ class DiagnosticToolService:
         self,
         motor_id: str,
         training_motor_id: str | None = None,
+        model_name: str = DIRECT_MODEL,
     ) -> dict:
         """Run forecast inference and record its complete tool duration."""
         started = time.perf_counter()
         try:
             with self._uow_factory() as uow:
-                result = self._forecasts.forecast(
-                    uow,
-                    motor_id,
-                    auto_train=True,
-                    training_motor_id=training_motor_id,
-                )
+                if model_name == DIRECT_MODEL:
+                    result = self._forecasts.forecast(
+                        uow,
+                        motor_id,
+                        auto_train=True,
+                        training_motor_id=training_motor_id,
+                    )
+                    result.update(
+                        {
+                            "model_name": DIRECT_MODEL,
+                            "model_label": "Direct Ridge",
+                        }
+                    )
+                else:
+                    result = self._ridge_lab.forecast(
+                        uow,
+                        motor_id=motor_id,
+                        training_motor_id=training_motor_id or motor_id,
+                        model_name=model_name,
+                    )
             result["tool_duration_ms"] = round(
                 (time.perf_counter() - started) * 1000,
                 6,
@@ -71,98 +85,6 @@ class DiagnosticToolService:
             return self._temperature_forecast_payload(
                 arguments.get("motor_id", ""),
                 arguments.get("training_motor_id"),
-            )
-        if name == "get_temperature_trajectory_forecast":
-            return self._temperature_trajectory_payload(
-                arguments.get("motor_id", ""),
-                arguments.get("training_motor_id"),
-                arguments.get("model_name", "ridge_history_trend"),
-                arguments.get("threshold_c", 35.0),
-                arguments.get("horizons_minutes", (5, 10, 15, 20, 25, 30)),
+                arguments.get("model_name", DIRECT_MODEL),
             )
         return {"error": "未知的工具"}
-
-    def _temperature_trajectory_payload(
-        self,
-        motor_id: str,
-        training_motor_id: str | None = None,
-        model_name: str = "ridge_history_trend",
-        threshold_c: float = 35.0,
-        horizons_minutes: Sequence[int] = (5, 10, 15, 20, 25, 30),
-    ) -> dict:
-        """Run a configurable multi-horizon forecast with pending future truth."""
-        started = time.perf_counter()
-        try:
-            with self._uow_factory() as uow:
-                result = self._research.forecast_trajectory(
-                    uow,
-                    motor_id=motor_id,
-                    training_motor_id=training_motor_id,
-                    model_name=model_name,
-                    threshold_c=threshold_c,
-                    horizons_minutes=horizons_minutes,
-                )
-            result["tool_duration_ms"] = round(
-                (time.perf_counter() - started) * 1000,
-                6,
-            )
-            return result
-        except ResearchError as error:
-            return {"error": str(error)}
-        except Exception as error:
-            return {"error": f"多時域預測失敗：{error}"}
-
-    def get_motor_status(self, motor_id: str) -> str:
-        """Google function schema and execution adapter for status queries.
-
-        Args:
-            motor_id: Device identifier such as ``M1`` or ``STM32-Node-1``.
-        """
-        return json.dumps(
-            self._motor_status_payload(motor_id),
-            ensure_ascii=False,
-        )
-
-    def get_temperature_forecast(
-        self,
-        motor_id: str,
-        training_motor_id: str | None = None,
-    ) -> str:
-        """Google function schema and execution adapter for forecasting.
-
-        Args:
-            motor_id: Device whose latest vector is used for inference.
-            training_motor_id: Optional device supplying the persisted model.
-        """
-        return json.dumps(
-            self._temperature_forecast_payload(motor_id, training_motor_id),
-            ensure_ascii=False,
-        )
-
-    def get_temperature_trajectory_forecast(
-        self,
-        motor_id: str,
-        training_motor_id: str | None = None,
-        model_name: str = "ridge_history_trend",
-        threshold_c: float = 35.0,
-        horizons_minutes: Sequence[int] = (5, 10, 15, 20, 25, 30),
-    ) -> str:
-        """Forecast configurable +5 through +60 minute temperatures and risk.
-
-        Args:
-            motor_id: Device whose newest exact 12-reading history is forecast.
-            training_motor_id: Optional separate device supplying training data.
-            model_name: Available research model ID; defaults to ridge_history_trend.
-            threshold_c: Engineering-approved warning threshold in degrees Celsius.
-            horizons_minutes: Increasing five-minute forecast horizons through 60.
-        """
-        return json.dumps(
-            self._temperature_trajectory_payload(
-                motor_id,
-                training_motor_id,
-                model_name,
-                threshold_c,
-                horizons_minutes,
-            ),
-            ensure_ascii=False,
-        )

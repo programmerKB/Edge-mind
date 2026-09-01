@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Composer from './components/Composer.jsx';
 import MessageList from './components/MessageList.jsx';
-import ResearchWorkspace from './components/ResearchWorkspace.jsx';
+import RidgeLab from './components/RidgeLab.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import Topbar from './components/Topbar.jsx';
 import Welcome from './components/Welcome.jsx';
@@ -14,21 +14,19 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeView, setActiveView] = useState('chat');
+  const [inferenceModel, setInferenceModel] = useState('ridge_direct');
   const messagesEndRef = useRef(null);
   const {
     messages,
     input,
     isLoading,
-    selectedModel,
-    modelOptions,
     hasMessages,
     setInput,
-    setSelectedModel,
     sendMessage,
     stopResponse,
     newChat,
     retryLastMessage,
-  } = useChat();
+  } = useChat(inferenceModel);
 
   useEffect(() => {
     // Every SSE event becomes a visible timeline item, so keep the newest one
@@ -42,7 +40,7 @@ export default function App() {
     setSidebarOpen(false);
   };
 
-  const navigate = (view) => {
+  const openView = (view) => {
     setActiveView(view);
     setSidebarOpen(false);
   };
@@ -55,53 +53,50 @@ export default function App() {
         onClose={() => setSidebarOpen(false)}
         onToggle={() => setSidebarCollapsed((value) => !value)}
         onNewChat={startNewChat}
-        onNavigate={navigate}
         activeView={activeView}
+        onOpenChat={() => openView('chat')}
+        onOpenRidgeLab={() => openView('ridgeLab')}
         hasMessages={hasMessages}
       />
       <main className="main-panel">
         <Topbar
-          activeView={activeView}
           onOpenMenu={() => setSidebarOpen(true)}
+          mode={activeView === 'ridgeLab' ? '雙 Ridge 實驗' : '設備診斷'}
+          inferenceModel={activeView === 'chat' ? inferenceModel : undefined}
+          onInferenceModelChange={activeView === 'chat' ? setInferenceModel : undefined}
+          inferenceModelDisabled={isLoading}
         />
 
-        <section className="chat-workspace" hidden={activeView !== 'chat'} aria-label="設備診斷對話">
-          {!hasMessages ? (
-            <div className="empty-state">
-              <Welcome onSuggestion={sendMessage} />
-              <Composer
-                value={input}
-                onChange={setInput}
-                onSend={sendMessage}
-                isLoading={isLoading}
-                onStop={stopResponse}
-                selectedModel={selectedModel}
-                modelOptions={modelOptions}
-                onModelChange={setSelectedModel}
-              />
-            </div>
-          ) : (
-            <>
-              <MessageList
-                messages={messages}
-                endRef={messagesEndRef}
-                onRetry={retryLastMessage}
-              />
-              <Composer
-                compact
-                value={input}
-                onChange={setInput}
-                onSend={sendMessage}
-                isLoading={isLoading}
-                onStop={stopResponse}
-                selectedModel={selectedModel}
-                modelOptions={modelOptions}
-                onModelChange={setSelectedModel}
-              />
-            </>
-          )}
-        </section>
-        <ResearchWorkspace active={activeView === 'research'} />
+        {activeView === 'ridgeLab' ? (
+          <RidgeLab />
+        ) : !hasMessages ? (
+          <div className="empty-state">
+            <Welcome onSuggestion={sendMessage} />
+            <Composer
+              value={input}
+              onChange={setInput}
+              onSend={sendMessage}
+              isLoading={isLoading}
+              onStop={stopResponse}
+            />
+          </div>
+        ) : (
+          <>
+            <MessageList
+              messages={messages}
+              endRef={messagesEndRef}
+              onRetry={retryLastMessage}
+            />
+            <Composer
+              compact
+              value={input}
+              onChange={setInput}
+              onSend={sendMessage}
+              isLoading={isLoading}
+              onStop={stopResponse}
+            />
+          </>
+        )}
       </main>
     </div>
   );

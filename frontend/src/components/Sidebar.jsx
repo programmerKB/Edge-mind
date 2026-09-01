@@ -18,9 +18,10 @@ export default function Sidebar({
   onClose,
   onToggle,
   onNewChat,
-  onNavigate,
-  activeView,
   hasMessages,
+  activeView,
+  onOpenChat,
+  onOpenRidgeLab,
 }) {
   return (
     <>
@@ -60,27 +61,25 @@ export default function Sidebar({
           <Plus size={18} />
           {!collapsed && <span>開始新診斷</span>}
         </button>
-        <nav className="sidebar-section" aria-label="主要功能">
-          {!collapsed && <p className="sidebar-label">工作區</p>}
+        <div className="sidebar-section">
+          {!collapsed && <p className="sidebar-label">最近紀錄</p>}
           <button
             className={`history-item ${activeView === 'chat' ? 'active' : ''}`}
-            onClick={() => onNavigate('chat')}
-            aria-current={activeView === 'chat' ? 'page' : undefined}
+            onClick={onOpenChat}
           >
             <MessageSquareText size={18} />
             {!collapsed && (
-              <span>{hasMessages ? '目前的設備診斷' : '設備診斷'}</span>
+              <span>{hasMessages ? '目前的設備診斷' : '尚無診斷紀錄'}</span>
             )}
           </button>
           <button
-            className={`history-item ${activeView === 'research' ? 'active' : ''}`}
-            onClick={() => onNavigate('research')}
-            aria-current={activeView === 'research' ? 'page' : undefined}
+            className={`history-item ${activeView === 'ridgeLab' ? 'active' : ''}`}
+            onClick={onOpenRidgeLab}
           >
             <FlaskConical size={18} />
-            {!collapsed && <span>研究工作台</span>}
+            {!collapsed && <span>Direct Ridge vs 歷史</span>}
           </button>
-        </nav>
+        </div>
         <div className="sidebar-footer">
           <div className="system-status">
             <span className="status-dot" />

@@ -5,9 +5,8 @@
 export const API_URL =
   import.meta.env.VITE_API_URL || '/api/chat_utf8';
 
-/** Base URL for the reproducible forecasting research workflow. */
-export const RESEARCH_API_URL =
-  import.meta.env.VITE_RESEARCH_API_URL || '/api/research';
+export const RIDGE_LAB_API_URL =
+  import.meta.env.VITE_RIDGE_LAB_API_URL || '/api/ridge-lab';
 
 /** Resolve a backend-relative artifact against the configured API origin. */
 export function resolveApiUrl(path) {

@@ -1,6 +1,6 @@
 /** @file Auto-growing chat input and send/stop controls. */
 
-import { Cpu, Plus, SendHorizontal, Square } from 'lucide-react';
+import { Plus, SendHorizontal, Square } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 /** Render the shared composer used by both empty and active chat layouts. */
@@ -10,9 +10,6 @@ export default function Composer({
   onSend,
   isLoading,
   onStop,
-  selectedModel,
-  modelOptions,
-  onModelChange,
   compact = false,
 }) {
   const textareaRef = useRef(null);
@@ -35,23 +32,6 @@ export default function Composer({
 
   return (
     <div className={`composer-wrap ${compact ? 'compact' : ''}`}>
-      <div className="diagnostic-model-row">
-        <label className="diagnostic-model-picker">
-          <Cpu size={15} aria-hidden="true" />
-          <span>預測模型</span>
-          <select
-            value={selectedModel}
-            onChange={(event) => onModelChange(event.target.value)}
-            disabled={isLoading}
-            aria-label="選擇設備預測模型"
-          >
-            {modelOptions.map((model) => (
-              <option key={model.id} value={model.id}>{model.label}</option>
-            ))}
-          </select>
-        </label>
-        <small>套用於溫度與風險預測；一般狀態查詢不受影響</small>
-      </div>
       <div className="composer">
         <button className="composer-plus" aria-label="新增附件">
           <Plus size={21} />

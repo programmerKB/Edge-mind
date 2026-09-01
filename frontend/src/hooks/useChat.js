@@ -7,22 +7,14 @@ import {
   findLastUserMessage,
   normalizeAttachments,
 } from '../models/chatMessage.js';
-import {
-  DEFAULT_FORECAST_MODEL_ID,
-  FORECAST_MODELS,
-} from '../models/forecastModel.js';
 import { streamChat } from '../services/chatApi.js';
-import { getResearchConfig } from '../services/researchApi.js';
 
 /** Return all state and actions required by the chat page. */
-export function useChat() {
+export function useChat(inferenceModel = 'ridge_direct') {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_FORECAST_MODEL_ID);
-  const [modelOptions, setModelOptions] = useState(FORECAST_MODELS);
   const activeRequestRef = useRef(null);
-  const modelConfigRequestRef = useRef(null);
   const mountedRef = useRef(false);
 
   useEffect(() => {
@@ -32,47 +24,7 @@ export function useChat() {
       mountedRef.current = false;
       activeRequestRef.current?.controller.abort();
       activeRequestRef.current = null;
-      modelConfigRequestRef.current?.abort();
-      modelConfigRequestRef.current = null;
     };
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    modelConfigRequestRef.current = controller;
-
-    getResearchConfig({ signal: controller.signal })
-      .then((config) => {
-        if (!mountedRef.current) return;
-        const catalogue = new Map(
-          (Array.isArray(config?.models) ? config.models : [])
-            .map((model) => [model.name || model.id, model]),
-        );
-        const available = FORECAST_MODELS.filter((model) => (
-          catalogue.get(model.id)?.status !== 'unavailable'
-        ));
-        if (!available.length) return;
-        setModelOptions(available);
-        setSelectedModel((current) => (
-          available.some((model) => model.id === current)
-            ? current
-            : available[0].id
-        ));
-      })
-      .catch((error) => {
-        if (error.name !== 'AbortError' && mountedRef.current) {
-          // Keep the canonical six-model fallback when config loading fails;
-          // the chat request still receives strict backend validation.
-          setModelOptions(FORECAST_MODELS);
-        }
-      })
-      .finally(() => {
-        if (modelConfigRequestRef.current === controller) {
-          modelConfigRequestRef.current = null;
-        }
-      });
-
-    return () => controller.abort();
   }, []);
 
   const lastUserMessage = useMemo(
@@ -111,8 +63,8 @@ export function useChat() {
 
     try {
       await streamChat(userMessage, {
-        modelName: selectedModel,
         signal: controller.signal,
+        inferenceModel,
         onEvent: (event) => {
           // A stopped or superseded request may still have one decoded event in
           // the browser queue; request IDs prevent it entering the new chat.
@@ -146,7 +98,7 @@ export function useChat() {
         if (mountedRef.current) setIsLoading(false);
       }
     }
-  }, [input, selectedModel]);
+  }, [inferenceModel, input]);
 
   const retryLastMessage = useCallback(() => {
     if (lastUserMessage && !activeRequestRef.current) {
@@ -158,11 +110,8 @@ export function useChat() {
     messages,
     input,
     isLoading,
-    selectedModel,
-    modelOptions,
     hasMessages: messages.length > 0,
     setInput,
-    setSelectedModel,
     sendMessage,
     stopResponse,
     newChat,

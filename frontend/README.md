@@ -1,14 +1,16 @@
-# EdgeMind Frontend
+# React + Vite
 
-這是 EdgeMind 的 React 19／Vite 8 前端，包含設備診斷聊天與研究工作台。完整系統定位、證據邊界、部署方式與 API 契約請讀 [專案 README](../README.md)。
+This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
-本機前端開發：
+Currently, two official plugins are available:
 
-```bash
-npm ci
-npm run lint
-npm run build
-npm run dev
-```
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-預設由 Vite／Nginx 將 `/api` 代理到後端。只有前後端分離部署時才設定 `VITE_API_URL` 與 `VITE_RESEARCH_API_URL`；不要提交 `frontend/.env.local`。
+## React Compiler
+
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+
+## Expanding the Oxlint configuration
+
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.

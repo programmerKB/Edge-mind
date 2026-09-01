@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 
 from edgemind.application.agent import AgentService
 from edgemind.domain.demo_data import (
     DEMO_INFERENCE_MOTOR_ID,
     DEMO_INFERENCE_READING_COUNT,
-    DEMO_INFERENCE_STATUS_PREFIX,
     DEMO_READING_COUNT,
     DEMO_TRAINING_MOTOR_ID,
-    DEMO_TRAINING_STATUS_PREFIX,
     build_demo_inference_readings,
     build_demo_readings,
 )
@@ -60,44 +57,28 @@ def _seed_demo_history(db) -> None:
     """Create deterministic training and inference histories idempotently."""
     training_query = db.query(MotorSensorData).filter(
         MotorSensorData.motor_id == DEMO_TRAINING_MOTOR_ID,
-        MotorSensorData.status.like("demo%"),
+        MotorSensorData.status == "demo",
     )
-    training_current = training_query.filter(
-        MotorSensorData.status.like(f"{DEMO_TRAINING_STATUS_PREFIX}-%")
-    ).count()
-    training_needs_refresh = (
-        training_current != DEMO_READING_COUNT
-        or training_query.count() != DEMO_READING_COUNT
-    )
+    if training_query.count() != DEMO_READING_COUNT:
+        # Only refresh rows produced by this fixture. Imported or real rows
+        # under the same demonstration motor ID remain untouched.
+        training_query.delete(synchronize_session=False)
+        db.add_all(
+            MotorSensorData(**reading) for reading in build_demo_readings()
+        )
 
     inference_query = db.query(MotorSensorData).filter(
         MotorSensorData.motor_id == DEMO_INFERENCE_MOTOR_ID,
-        MotorSensorData.status.like("demo%"),
+        MotorSensorData.status == "demo-inference",
     )
-    inference_current = inference_query.filter(
-        MotorSensorData.status.like(f"{DEMO_INFERENCE_STATUS_PREFIX}-%")
-    ).count()
-    inference_needs_refresh = (
-        inference_current != DEMO_INFERENCE_READING_COUNT
-        or inference_query.count() != DEMO_INFERENCE_READING_COUNT
-    )
-    if not training_needs_refresh and not inference_needs_refresh:
-        return
-
-    # Treat the two generated devices as one versioned release.  Refreshing
-    # only one side at a later origin can make training labels extend beyond
-    # the inference origin and invalidate cross-device forecasting.
-    reference_time = datetime.now(timezone.utc)
-    training_query.delete(synchronize_session=False)
-    inference_query.delete(synchronize_session=False)
-    db.add_all(
-        MotorSensorData(**reading)
-        for reading in build_demo_readings(reference_time)
-    )
-    db.add_all(
-        MotorSensorData(**reading)
-        for reading in build_demo_inference_readings(reference_time)
-    )
+    if inference_query.count() != DEMO_INFERENCE_READING_COUNT:
+        # Replace only generated demo rows; real rows using the same motor ID are
+        # deliberately left untouched.
+        inference_query.delete(synchronize_session=False)
+        db.add_all(
+            MotorSensorData(**reading)
+            for reading in build_demo_inference_readings()
+        )
 
 
 def initialize_database(reports: FilesystemReportGateway) -> None:

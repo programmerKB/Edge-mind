@@ -17,11 +17,9 @@ from edgemind.infrastructure.reporting.io import export_demo_datasets
 from edgemind.infrastructure.reporting.performance import (
     finalize_performance_report,
 )
-from edgemind.infrastructure.reporting.research_results import (
-    get_research_experiment,
-    get_research_forecast,
-    save_research_experiment,
-    save_research_forecast,
+from edgemind.infrastructure.reporting.ridge_experiments import (
+    get_ridge_experiment,
+    save_ridge_experiment,
 )
 
 
@@ -78,18 +76,10 @@ class FilesystemReportGateway:
             self._context.root,
         )
 
-    def save_research_experiment(self, result: dict) -> dict:
-        """Persist one complete research result with flat CSV metric tables."""
-        return save_research_experiment(result, self._context.root)
+    def save_ridge_experiment(self, result: dict) -> dict:
+        """Persist one dual-Ridge comparison in a dated result directory."""
+        return save_ridge_experiment(self._context, result)
 
-    def get_research_experiment(self, experiment_id: str) -> dict | None:
-        """Load one completed experiment from the report root."""
-        return get_research_experiment(experiment_id, self._context.root)
-
-    def save_research_forecast(self, result: dict) -> dict:
-        """Persist one current multi-horizon forecast and its lineage."""
-        return save_research_forecast(result, self._context.root)
-
-    def get_research_forecast(self, forecast_id: str) -> dict | None:
-        """Load one previously saved current multi-horizon forecast."""
-        return get_research_forecast(forecast_id, self._context.root)
+    def get_ridge_experiment(self, experiment_id: str) -> dict | None:
+        """Read one prior dual-Ridge comparison by its stable identifier."""
+        return get_ridge_experiment(self._context, experiment_id)

@@ -41,8 +41,8 @@ function ReportGallery({ attachments }) {
   if (!attachments?.length) return null;
 
   return (
-    <section className="report-attachments" aria-label="預測與模型評估圖表">
-      <h3><Images size={17} />預測與模型評估圖表</h3>
+    <section className="report-attachments" aria-label="模型評估圖表">
+      <h3><Images size={17} />模型評估圖表</h3>
       <div className="report-gallery">
         {attachments.map((attachment) => (
           <figure className="report-chart" key={attachment.url}>

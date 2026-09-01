@@ -1,27 +1,16 @@
 """Pydantic request contracts owned by the HTTP presentation layer."""
 
-from typing import Annotated, Literal
+from datetime import datetime
+from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
-
-
-ResearchModelName = Literal[
-    "ridge_direct",
-    "ridge_history_trend",
-    "dlinear",
-    "lstm",
-    "tcn",
-    "patchtst",
-]
+from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
     """Validated user input accepted by both chat streaming endpoints."""
 
-    model_config = ConfigDict(extra="forbid")
-
     message: str = Field(min_length=1, max_length=10_000)
-    model_name: ResearchModelName | None = None
+    inference_model: Literal["ridge_direct", "ridge_history"] = "ridge_direct"
 
 
 class SensorReadingRequest(BaseModel):
@@ -33,59 +22,20 @@ class SensorReadingRequest(BaseModel):
     accel_x: float
     accel_y: float
     accel_z: float
-    recorded_at: AwareDatetime | None = None
+    recorded_at: datetime | None = None
     status: str = Field(default="normal", max_length=50)
 
 
-class ResearchExperimentRequest(BaseModel):
-    """Validated, reproducible configuration for one synchronous experiment."""
-
-    model_config = ConfigDict(extra="forbid")
+class RidgeExperimentRequest(BaseModel):
+    """One fixed dual-Ridge experiment selection."""
 
     training_motor_id: str = Field(min_length=1, max_length=100)
     evaluation_motor_id: str | None = Field(default=None, max_length=100)
-    history_minutes: int = Field(default=60, ge=10, le=24 * 60)
-    horizons_minutes: list[Annotated[int, Field(ge=5, le=60)]] = Field(
-        default_factory=lambda: [5, 10, 15, 20, 25, 30],
-        min_length=1,
-        max_length=12,
-    )
-    threshold_c: float = Field(default=35.0, ge=20, le=120, allow_inf_nan=False)
-    model_names: list[ResearchModelName] = Field(
-        default_factory=lambda: [
-            "ridge_direct",
-            "ridge_history_trend",
-            "dlinear",
-            "lstm",
-            "tcn",
-            "patchtst",
-        ],
-        min_length=1,
-        max_length=6,
-    )
-    include_ablations: bool = True
-    sampling_minutes: int = Field(default=5, ge=1, le=60)
-    train_fraction: float = Field(default=0.60, gt=0, lt=1)
-    validation_fraction: float = Field(default=0.20, gt=0, lt=1)
-    gap_steps: int | None = Field(default=None, ge=0, le=288)
-    walk_forward_folds: int = Field(default=3, ge=1, le=10)
-    random_seed: int = Field(default=42, ge=0, le=2_147_483_647)
 
 
-class ResearchForecastRequest(BaseModel):
-    """Configuration for a current six-point trajectory and risk forecast."""
-
-    model_config = ConfigDict(extra="forbid")
+class RidgeForecastRequest(BaseModel):
+    """Apply one Ridge variant to a device's newest history window."""
 
     motor_id: str = Field(min_length=1, max_length=100)
-    training_motor_id: str | None = Field(default=None, max_length=100)
-    model_name: ResearchModelName = "ridge_history_trend"
-    history_minutes: int = Field(default=60, ge=10, le=24 * 60)
-    horizons_minutes: list[Annotated[int, Field(ge=5, le=60)]] = Field(
-        default_factory=lambda: [5, 10, 15, 20, 25, 30],
-        min_length=1,
-        max_length=12,
-    )
-    threshold_c: float = Field(default=35.0, ge=20, le=120, allow_inf_nan=False)
-    sampling_minutes: int = Field(default=5, ge=1, le=60)
-    random_seed: int = Field(default=42, ge=0, le=2_147_483_647)
+    training_motor_id: str = Field(min_length=1, max_length=100)
+    model_name: Literal["ridge_direct", "ridge_history"]
