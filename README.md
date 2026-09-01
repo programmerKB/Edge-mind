@@ -21,6 +21,7 @@ EdgeMind 是一套面向工業馬達與邊緣設備的 AI 診斷系統。它整�
 
 - 查詢設備最新溫度、濕度、XYZ 三軸加速度與震動狀態。
 - 使用五項感測特徵預測 30 分鐘後的設備溫度。
+- 在「雙 Ridge 實驗」中公平比較當下特徵與最近 60 分鐘歷史摘要。
 - 支援以 A 設備訓練模型，再用該模型推論 B 設備。
 - 提供 MAE、MSE、RMSE、R²、MAPE 與誤差中位數等回歸指標。
 - 提供混淆矩陣、Precision、Recall、Specificity、F1、ROC-AUC 與 PR-AUC 等異常偵測指標。
@@ -119,13 +120,15 @@ docker compose logs --tail=100 frontend
 
 ### Web UI
 
-開啟 <http://localhost:5173>，輸入：
+開啟 <http://localhost:5173>。設備問答可直接輸入：
 
 ```text
 請使用 DEMO-1 訓練的模型，推論 DEMO-2 在 30 分鐘後的溫度，並說明模型誤差
 ```
 
 後端會執行確定性的預測工具，先透過 SSE 回傳執行狀態與 SVG 圖表附件，再由 Gemini 根據真實工具結果整理繁體中文說明。
+
+設備診斷頁上方的「溫度推論」可選擇 `Direct Ridge` 或 `Ridge + History`；此選擇會隨聊天請求送到後端，並強制套用在 Agent 的溫度預測工具。若要比較模型，從左側選擇「Direct Ridge vs 歷史」；選好訓練設備與選填的外部評估設備後，即可執行完整時間切分實驗或產生最新預測。
 
 ### REST API
 
@@ -143,8 +146,8 @@ curl 'http://127.0.0.1:8000/api/predictions/temperature/DEMO-2?training_motor_id
 
 第一次啟動時，系統會建立兩個不重複寫入的合成資料集：
 
-- `DEMO-1`：36 筆、每 5 分鐘一筆，僅用於模型訓練。
-- `DEMO-2`：36 筆獨立資料，用於推論與比對 30 分鐘後真值，不會被加入訓練資料。
+- `DEMO-1`：120 筆、每 5 分鐘一筆，供模型訓練與比較。
+- `DEMO-2`：120 筆獨立資料，可做推論與零樣本外部評估，不會被加入訓練資料。
 
 這些資料只用於確認流程，不代表真實設備表現。正式環境請設定 `SEED_DEMO_DATA=false`。
 
@@ -280,6 +283,15 @@ EdgeMind 為每個訓練設備保存獨立模型，避免不同機台的負載�
 
 合成資料上的低誤差不等於真實設備準確度。上線前必須使用每台設備的真實歷史資料重新訓練與驗證。
 
+### 雙 Ridge 實驗
+
+| 模型 | 輸入 |
+| --- | --- |
+| Direct Ridge | 預測起點當下的溫度、濕度、X／Y／Z，共 5 項 |
+| Ridge + History | 最近 60 分鐘各感測項目的現值、均值、標準差、最小值、最大值、變化量與斜率，共 35 項 |
+
+兩個模型使用完全相同的有效樣本，依時間做 60%／20%／20% 訓練、驗證、測試切分；切分間保留 30 分鐘 purge gap。驗證集只從 `0.01`、`0.1`、`1.0` 選擇 Ridge α，模型優劣則以鎖定測試集的 MAE 判定。若指定另一設備，另列零樣本外部評估，不混入訓練。
+
 ## 推論報表與圖表
 
 每次推論會依設定時區建立獨立輸出資料夾：
@@ -305,6 +317,10 @@ backend/outputs/
 │   │   ├── 06_error_metrics.svg
 │   │   └── 07_system_performance.svg
 │   └── metadata/run_summary.json
+├── ridge_experiments/YYYY-MM-DD/HH-MM-SS-ffffff_ID/
+│   ├── result.json
+│   ├── model_comparison.csv
+│   └── test_predictions.csv
 ├── performance/
 │   ├── performance_history.csv
 │   ├── performance_summary.csv
@@ -326,6 +342,10 @@ REST 預測回應會包含 `attachments`；聊天流程則以 `status: "artifact
 | POST | `/api/sensor-readings` | 寫入完整感測資料 |
 | POST | `/api/predictions/train/{motor_id}` | 訓練並保存設備模型 |
 | GET | `/api/predictions/temperature/{motor_id}` | 預測 30 分鐘後溫度；可指定 `training_motor_id` |
+| GET | `/api/ridge-lab/config` | 取得雙 Ridge 方法與目前各設備資料量 |
+| POST | `/api/ridge-lab/experiments` | 執行並保存 Direct／History Ridge 比較 |
+| GET | `/api/ridge-lab/experiments/{id}` | 讀取已保存的實驗摘要 |
+| POST | `/api/ridge-lab/forecasts` | 使用指定 Ridge 版本預測 30 分鐘後溫度 |
 | GET | `/api/performance/summary` | 取得跨執行效能統計 |
 | GET | `/api/report-artifacts/{path}` | 讀取預測附件中的 SVG 圖表 |
 
@@ -405,9 +425,31 @@ npm run dev
 
 ## 部署與維運
 
+### Production 部署腳本
+
+正式部署使用 Nginx 靜態前端、無 `--reload` 的 FastAPI、內網 PostgreSQL 與容器健康檢查。第一次使用：
+
+```bash
+cp .env.example .env
+# 編輯 .env，填入 Gemini key、資料庫密碼與相同密碼的 DATABASE_URL
+./deploy.sh deploy
+```
+
+腳本會檢查必要設定、建置 images、啟動服務並從後端與 Nginx `/api` 代理各做一次 smoke test。預設入口為 <http://localhost:5173>，後端只綁定主機的 `127.0.0.1:8000`，PostgreSQL 不公開連接埠。
+
+```bash
+./deploy.sh status   # 查看容器與健康狀態
+./deploy.sh smoke    # 再次檢查前後端
+./deploy.sh logs     # 追蹤服務日誌
+./deploy.sh restart  # 重啟應用服務
+./deploy.sh stop     # 停止但保留資料庫與實驗輸出
+```
+
+可在 `.env` 以 `APP_PORT` 與 `BACKEND_PORT` 修改主機端連接埠。正式模式使用 [`docker-compose.prod.yml`](./docker-compose.prod.yml)；原本的 `docker-compose.yml` 繼續作為本機開發環境。
+
 ### 區域網路存取
 
-Docker Compose 會讓 Vite 將 `/api` 代理到後端。區域網路裝置可直接開啟：
+Production 的 Nginx（開發模式則為 Vite）會將 `/api` 代理到後端。區域網路裝置可直接開啟：
 
 ```text
 http://192.168.1.50:5173
@@ -417,6 +459,7 @@ http://192.168.1.50:5173
 
 ```dotenv
 VITE_API_URL=http://192.168.1.50:8000/api/chat_utf8
+VITE_RIDGE_LAB_API_URL=http://192.168.1.50:8000/api/ridge-lab
 ```
 
 這種分離部署模式也必須允許 API 連接埠。行動裝置中的 `127.0.0.1` 指向裝置本身，不是部署主機。

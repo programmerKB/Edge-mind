@@ -1,6 +1,7 @@
 /** @file Responsive navigation and current-session summary. */
 
 import {
+  FlaskConical,
   MessageSquareText,
   PanelLeftClose,
   PanelLeftOpen,
@@ -18,6 +19,9 @@ export default function Sidebar({
   onToggle,
   onNewChat,
   hasMessages,
+  activeView,
+  onOpenChat,
+  onOpenRidgeLab,
 }) {
   return (
     <>
@@ -60,13 +64,20 @@ export default function Sidebar({
         <div className="sidebar-section">
           {!collapsed && <p className="sidebar-label">最近紀錄</p>}
           <button
-            className={`history-item ${hasMessages ? 'active' : ''}`}
-            onClick={onClose}
+            className={`history-item ${activeView === 'chat' ? 'active' : ''}`}
+            onClick={onOpenChat}
           >
             <MessageSquareText size={18} />
             {!collapsed && (
               <span>{hasMessages ? '目前的設備診斷' : '尚無診斷紀錄'}</span>
             )}
+          </button>
+          <button
+            className={`history-item ${activeView === 'ridgeLab' ? 'active' : ''}`}
+            onClick={onOpenRidgeLab}
+          >
+            <FlaskConical size={18} />
+            {!collapsed && <span>Direct Ridge vs 歷史</span>}
           </button>
         </div>
         <div className="sidebar-footer">

@@ -8,6 +8,7 @@ from edgemind.application.agent import AgentService
 from edgemind.domain.demo_data import (
     DEMO_INFERENCE_MOTOR_ID,
     DEMO_INFERENCE_READING_COUNT,
+    DEMO_READING_COUNT,
     DEMO_TRAINING_MOTOR_ID,
     build_demo_inference_readings,
     build_demo_readings,
@@ -54,13 +55,14 @@ def _seed_baseline_devices(db) -> None:
 
 def _seed_demo_history(db) -> None:
     """Create deterministic training and inference histories idempotently."""
-    training_exists = (
-        db.query(MotorSensorData.id)
-        .filter(MotorSensorData.motor_id == DEMO_TRAINING_MOTOR_ID)
-        .first()
-        is not None
+    training_query = db.query(MotorSensorData).filter(
+        MotorSensorData.motor_id == DEMO_TRAINING_MOTOR_ID,
+        MotorSensorData.status == "demo",
     )
-    if not training_exists:
+    if training_query.count() != DEMO_READING_COUNT:
+        # Only refresh rows produced by this fixture. Imported or real rows
+        # under the same demonstration motor ID remain untouched.
+        training_query.delete(synchronize_session=False)
         db.add_all(
             MotorSensorData(**reading) for reading in build_demo_readings()
         )

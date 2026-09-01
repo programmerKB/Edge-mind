@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:24-slim
 WORKDIR /app
 
 # npm ci follows package-lock exactly and is reproducible in clean images.

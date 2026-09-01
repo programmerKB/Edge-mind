@@ -10,17 +10,67 @@ from google import genai
 from google.genai import types
 
 from edgemind.application.agent import ModelReply, ToolCall
-from edgemind.application.ports import DiagnosticTools
 from edgemind.infrastructure.config import AGENT_SYSTEM_INSTRUCTION, Settings
+
+
+DIAGNOSTIC_TOOL = types.Tool(
+    function_declarations=[
+        types.FunctionDeclaration(
+            name="get_motor_status",
+            description=(
+                "取得指定馬達最新的溫度、濕度、三軸加速度與健康狀態。"
+            ),
+            parameters_json_schema={
+                "type": "object",
+                "properties": {
+                    "motor_id": {
+                        "type": "string",
+                        "description": "馬達識別碼，例如 M1、M2 或 DEMO-2。",
+                    }
+                },
+                "required": ["motor_id"],
+                "additionalProperties": False,
+            },
+        ),
+        types.FunctionDeclaration(
+            name="get_temperature_forecast",
+            description=(
+                "使用 Ridge Regression 預測指定馬達 30 分鐘後的溫度，"
+                "並回傳模型評估與報表。"
+            ),
+            parameters_json_schema={
+                "type": "object",
+                "properties": {
+                    "motor_id": {
+                        "type": "string",
+                        "description": "要推論的馬達識別碼。",
+                    },
+                    "training_motor_id": {
+                        "type": "string",
+                        "description": "選填；提供 Ridge 模型訓練資料的馬達。",
+                    },
+                    "model_name": {
+                        "type": "string",
+                        "enum": ["ridge_direct", "ridge_history"],
+                        "description": (
+                            "推論方式；最終值會由使用者在介面中的選擇決定。"
+                        ),
+                    },
+                },
+                "required": ["motor_id"],
+                "additionalProperties": False,
+            },
+        ),
+    ]
+)
 
 
 class GeminiModelGateway:
     """Translate application model requests to Google Gen AI SDK calls."""
 
-    def __init__(self, settings: Settings, tools: DiagnosticTools):
-        """Bind deployment settings and callable diagnostic tool schemas."""
+    def __init__(self, settings: Settings):
+        """Bind deployment settings to explicit, data-only tool schemas."""
         self._settings = settings
-        self._tools = tools
         self._client: genai.Client | None = None
 
     def initialize(self) -> None:
@@ -57,10 +107,10 @@ class GeminiModelGateway:
             ],
             types.GenerateContentConfig(
                 system_instruction=AGENT_SYSTEM_INSTRUCTION,
-                tools=[
-                    self._tools.get_motor_status,
-                    self._tools.get_temperature_forecast,
-                ],
+                tools=[DIAGNOSTIC_TOOL],
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                    disable=True
+                ),
                 temperature=0.2,
             ),
         )

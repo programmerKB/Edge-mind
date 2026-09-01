@@ -23,6 +23,10 @@ class SensorRepository(Protocol):
         """Stage one new sensor reading and return generated fields."""
         ...
 
+    def list_device_summaries(self) -> list[dict]:
+        """Return aggregate data availability for each device."""
+        ...
+
 
 class ForecastModelRepository(Protocol):
     """Persistence operations for serialized forecast model payloads."""
@@ -95,6 +99,18 @@ class ReportQueryGateway(Protocol):
         ...
 
 
+class RidgeExperimentReportGateway(Protocol):
+    """Persist and retrieve compact dual-Ridge experiment reports."""
+
+    def save_ridge_experiment(self, result: dict) -> dict:
+        """Write structured results and tabular predictions to disk."""
+        ...
+
+    def get_ridge_experiment(self, experiment_id: str) -> dict | None:
+        """Read a previously saved experiment when it exists."""
+        ...
+
+
 class AgentModelGateway(Protocol):
     """Text-model behavior needed by the Agent orchestration use case."""
 
@@ -116,16 +132,4 @@ class DiagnosticTools(Protocol):
 
     def execute(self, name: str, arguments: dict) -> dict:
         """Execute an allow-listed tool and return its payload."""
-        ...
-
-    def get_motor_status(self, motor_id: str) -> str:
-        """Expose a typed function schema for the model gateway."""
-        ...
-
-    def get_temperature_forecast(
-        self,
-        motor_id: str,
-        training_motor_id: str | None = None,
-    ) -> str:
-        """Expose a typed forecast function schema for the model gateway."""
         ...

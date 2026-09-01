@@ -15,13 +15,16 @@ function parseEvent(rawEvent) {
 /**
  * Stream one Agent request without waiting for the complete response body.
  * @param {string} message
- * @param {{signal: AbortSignal, onEvent: (event: object) => void}} options
+ * @param {{signal: AbortSignal, onEvent: (event: object) => void, inferenceModel: string}} options
  */
-export async function streamChat(message, { signal, onEvent }) {
+export async function streamChat(message, { signal, onEvent, inferenceModel }) {
   const response = await fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({
+      message,
+      inference_model: inferenceModel,
+    }),
     signal,
   });
 

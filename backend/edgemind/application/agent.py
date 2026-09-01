@@ -8,6 +8,8 @@ from typing import AsyncIterator
 
 from edgemind.application.intent import temperature_forecast_arguments
 from edgemind.application.ports import AgentModelGateway, DiagnosticTools
+from edgemind.domain.forecasting import ForecastError
+from edgemind.domain.ridge_experiments import DIRECT_MODEL, MODEL_LABELS
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,9 +49,15 @@ class AgentService:
         self._model = model
         self._tools = tools
 
-    async def stream(self, message: str) -> AsyncIterator[AgentEvent]:
+    async def stream(
+        self,
+        message: str,
+        inference_model: str = DIRECT_MODEL,
+    ) -> AsyncIterator[AgentEvent]:
         """Yield one complete Agent interaction without transport encoding."""
         try:
+            if inference_model not in MODEL_LABELS:
+                raise ForecastError(f"不支援的推論模型：{inference_model}")
             yield AgentEvent("thought", "Agent 正在分析您的請求...")
             direct_arguments = temperature_forecast_arguments(message)
             if direct_arguments:
@@ -62,6 +70,23 @@ class AgentService:
                     yield AgentEvent("success", decision.text)
                     return
                 tool_calls = decision.tool_calls
+
+            # The UI selection is authoritative. Never let a language-model
+            # generated argument silently change the requested Ridge variant.
+            tool_calls = tuple(
+                ToolCall(
+                    call.name,
+                    {
+                        **call.arguments,
+                        **(
+                            {"model_name": inference_model}
+                            if call.name == "get_temperature_forecast"
+                            else {}
+                        ),
+                    },
+                )
+                for call in tool_calls
+            )
 
             tool_results: list[dict] = []
             sent_attachment_urls: set[str] = set()
@@ -117,7 +142,7 @@ def _observation_message(name: str, payload: dict) -> str:
         return f"已取得 {payload.get('motor_id', '設備')} 的最新感測資料。"
     if name == "get_temperature_forecast":
         return (
-            f"已完成 {payload.get('motor_id', '設備')} 的 "
-            "30 分鐘溫度預測與模型評估。"
+            f"已使用 {payload.get('model_label', 'Ridge')} 完成 "
+            f"{payload.get('motor_id', '設備')} 的 30 分鐘溫度預測與模型評估。"
         )
     return "後端資料已取得。"

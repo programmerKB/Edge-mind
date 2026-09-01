@@ -58,7 +58,7 @@ class DemoSeedTests(unittest.TestCase):
         records = [SimpleNamespace(**reading) for reading in readings]
         examples = build_training_examples(records)
         self.assertGreaterEqual(len(examples), MIN_TRAINING_SAMPLES)
-        self.assertEqual(len(examples), 31)
+        self.assertEqual(len(examples), DEMO_READING_COUNT - 5)
 
     def test_demo_2_has_enough_history_for_truth_evaluation(self):
         reference_time = datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc)

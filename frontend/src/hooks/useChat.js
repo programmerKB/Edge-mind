@@ -10,7 +10,7 @@ import {
 import { streamChat } from '../services/chatApi.js';
 
 /** Return all state and actions required by the chat page. */
-export function useChat() {
+export function useChat(inferenceModel = 'ridge_direct') {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -64,6 +64,7 @@ export function useChat() {
     try {
       await streamChat(userMessage, {
         signal: controller.signal,
+        inferenceModel,
         onEvent: (event) => {
           // A stopped or superseded request may still have one decoded event in
           // the browser queue; request IDs prevent it entering the new chat.
@@ -97,7 +98,7 @@ export function useChat() {
         if (mountedRef.current) setIsLoading(false);
       }
     }
-  }, [input]);
+  }, [inferenceModel, input]);
 
   const retryLastMessage = useCallback(() => {
     if (lastUserMessage && !activeRequestRef.current) {

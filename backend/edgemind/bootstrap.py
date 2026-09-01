@@ -13,6 +13,7 @@ from edgemind.application.agent import AgentService
 from edgemind.application.diagnostics import DiagnosticToolService
 from edgemind.application.forecasts import ForecastService
 from edgemind.application.ports import UnitOfWork
+from edgemind.application.ridge_lab import RidgeLabService
 from edgemind.application.sensors import SensorService
 from edgemind.infrastructure.ai.gemini import GeminiModelGateway
 from edgemind.infrastructure.config import settings
@@ -31,6 +32,7 @@ class ApplicationContainer:
     uow_factory: Callable[[], UnitOfWork]
     reports: FilesystemReportGateway
     forecasts: ForecastService
+    ridge_lab: RidgeLabService
     sensors: SensorService
     tools: DiagnosticToolService
     model: GeminiModelGateway
@@ -42,14 +44,16 @@ def create_container() -> ApplicationContainer:
     uow_factory = partial(SqlAlchemyUnitOfWork, SessionLocal)
     reports = FilesystemReportGateway(ReportContext.from_settings(settings))
     forecasts = ForecastService(reports)
+    ridge_lab = RidgeLabService(reports)
     sensors = SensorService()
-    tools = DiagnosticToolService(uow_factory, forecasts, sensors)
-    model = GeminiModelGateway(settings, tools)
+    tools = DiagnosticToolService(uow_factory, forecasts, ridge_lab, sensors)
+    model = GeminiModelGateway(settings)
     agent = AgentService(model, tools)
     return ApplicationContainer(
         uow_factory=uow_factory,
         reports=reports,
         forecasts=forecasts,
+        ridge_lab=ridge_lab,
         sensors=sensors,
         tools=tools,
         model=model,

@@ -70,7 +70,10 @@ class ReportingTests(unittest.TestCase):
             )
 
             files = report["files"]
-            self.assertEqual(report["completed_evaluation_samples"], 31)
+            self.assertEqual(
+                report["completed_evaluation_samples"],
+                len(inference) - 5,
+            )
             self.assertTrue(Path(files["predictions_csv"]).is_file())
             self.assertTrue(Path(files["baseline_csv"]).is_file())
             self.assertTrue(Path(files["anomaly_csv"]).is_file())

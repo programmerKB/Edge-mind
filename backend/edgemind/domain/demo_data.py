@@ -8,8 +8,10 @@ DEMO_TRAINING_MOTOR_ID = "DEMO-1"
 DEMO_INFERENCE_MOTOR_ID = "DEMO-2"
 # Backwards-compatible name used by existing callers and tests.
 DEMO_MOTOR_ID = DEMO_TRAINING_MOTOR_ID
-DEMO_READING_COUNT = 36
-DEMO_INFERENCE_READING_COUNT = 36
+# Ten hours of five-minute data is enough for the history-aware experiment's
+# chronological train/validation/test split and its two purge gaps.
+DEMO_READING_COUNT = 120
+DEMO_INFERENCE_READING_COUNT = 120
 DEMO_INTERVAL_MINUTES = 5
 
 
