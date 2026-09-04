@@ -22,14 +22,22 @@ const STATUS_META = {
 };
 
 /** Render compact Agent progress without treating it as a final answer. */
-function StatusMessage({ message }) {
+function StatusMessage({ message, active, onRetry }) {
   const meta = STATUS_META[message.status] || STATUS_META.thought;
   const Icon = meta.icon;
+  const label = message.status === 'thought' && !active
+    ? '分析進度'
+    : meta.label;
   return (
     <div className={`status-message ${meta.className}`}>
       <span className="status-icon"><Icon size={15} /></span>
-      <div><strong>{meta.label}</strong><p>{message.content}</p></div>
-      {message.status === 'thought' && (
+      <div><strong>{label}</strong><p>{message.content}</p></div>
+      {message.status === 'error' && (
+        <button className="status-retry" type="button" onClick={onRetry}>
+          <RotateCcw size={14} />重試
+        </button>
+      )}
+      {message.status === 'thought' && active && (
         <span className="typing-dots"><i /><i /><i /></span>
       )}
     </div>
@@ -81,7 +89,7 @@ function ArtifactMessage({ message }) {
 }
 
 /** Select the appropriate renderer for one non-user timeline item. */
-function AssistantMessage({ message, onRetry }) {
+function AssistantMessage({ message, active, onRetry }) {
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef(null);
 
@@ -103,7 +111,7 @@ function AssistantMessage({ message, onRetry }) {
   }
 
   if (message.status !== 'success') {
-    return <StatusMessage message={message} />;
+    return <StatusMessage message={message} active={active} onRetry={onRetry} />;
   }
 
   return (
@@ -128,11 +136,11 @@ function AssistantMessage({ message, onRetry }) {
 }
 
 /** Render the ordered conversation and the scroll anchor owned by App. */
-export default function MessageList({ messages, endRef, onRetry }) {
+export default function MessageList({ messages, endRef, isLoading, onRetry }) {
   return (
     <div className="conversation" aria-live="polite">
       <div className="conversation-inner">
-        {messages.map((message) => (
+        {messages.map((message, index) => (
           message.role === 'user' ? (
             <div className="user-row" key={message.id}>
               <div className="user-message">{message.content}</div>
@@ -141,6 +149,7 @@ export default function MessageList({ messages, endRef, onRetry }) {
             <AssistantMessage
               key={message.id}
               message={message}
+              active={isLoading && index === messages.length - 1}
               onRetry={onRetry}
             />
           )

@@ -275,6 +275,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .status-message.observation .status-icon { color: #9a671c; background: #fff8e8; border-color: #f8eac9; }
 .status-message.error { color: #9e4040; background: #fff6f5; border-color: #f3d8d5; }
 .status-message.error .status-icon { color: #c14b44; background: #fff; border-color: #f3d8d5; }
+.status-retry { display: flex; align-items: center; gap: 5px; align-self: center; flex: 0 0 auto; margin-left: auto; padding: 6px 9px; color: #9e4040; background: #fff; border: 1px solid #edcbc7; border-radius: 7px; font: inherit; font-weight: 700; cursor: pointer; }
+.status-retry:hover { background: #ffebe8; }
 .typing-dots { display: flex; align-self: center; gap: 3px; margin-left: auto; padding: 5px; }
 .typing-dots i { width: 4px; height: 4px; background: #939793; border-radius: 50%; animation: dot-pulse 1.2s infinite ease-in-out; }
 .typing-dots i:nth-child(2) { animation-delay: .15s; }

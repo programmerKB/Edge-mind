@@ -65,6 +65,19 @@ DIAGNOSTIC_TOOL = types.Tool(
 )
 
 
+_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+_RETRY_DELAYS_SECONDS = (0.5, 1.0)
+
+
+def _model_error_status_code(error: Exception) -> int | None:
+    """Read the HTTP status exposed by Google Gen AI without parsing text."""
+    code = getattr(error, "code", None)
+    try:
+        return int(code) if code is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 class GeminiModelGateway:
     """Translate application model requests to Google Gen AI SDK calls."""
 
@@ -79,22 +92,44 @@ class GeminiModelGateway:
             self._client = genai.Client()
 
     async def _generate(self, contents: list[types.Content], config):
-        """Run the blocking SDK outside the event loop with a timeout."""
+        """Run the blocking SDK with timeout and bounded transient retries."""
         self.initialize()
         assert self._client is not None
-        try:
-            return await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._client.models.generate_content,
-                    model=self._settings.model_id,
-                    contents=contents,
-                    config=config,
-                ),
-                timeout=self._settings.agent_response_timeout_seconds,
-            )
-        except TimeoutError as error:
-            seconds = f"{self._settings.agent_response_timeout_seconds:g}"
-            raise RuntimeError(f"模型服務超過 {seconds} 秒未回應") from error
+        attempts = len(_RETRY_DELAYS_SECONDS) + 1
+        fallback_model_id = getattr(self._settings, "fallback_model_id", None)
+        model_ids = [self._settings.model_id]
+        if fallback_model_id and fallback_model_id != self._settings.model_id:
+            model_ids.append(fallback_model_id)
+
+        for model_index, model_id in enumerate(model_ids):
+            for attempt in range(attempts):
+                try:
+                    return await asyncio.wait_for(
+                        asyncio.to_thread(
+                            self._client.models.generate_content,
+                            model=model_id,
+                            contents=contents,
+                            config=config,
+                        ),
+                        timeout=self._settings.agent_response_timeout_seconds,
+                    )
+                except TimeoutError as error:
+                    seconds = f"{self._settings.agent_response_timeout_seconds:g}"
+                    raise RuntimeError(f"模型服務超過 {seconds} 秒未回應") from error
+                except Exception as error:
+                    status_code = _model_error_status_code(error)
+                    if status_code not in _RETRYABLE_STATUS_CODES:
+                        raise
+                    if attempt < attempts - 1:
+                        await asyncio.sleep(_RETRY_DELAYS_SECONDS[attempt])
+                        continue
+                    if model_index == len(model_ids) - 1:
+                        raise RuntimeError(
+                            "模型服務目前忙碌，所有可用模型皆已自動重試，"
+                            "請稍後再試。"
+                        ) from error
+
+        raise AssertionError("unreachable")
 
     async def decide(self, message: str) -> ModelReply:
         """Ask Gemini for either a direct response or explicit tool calls."""

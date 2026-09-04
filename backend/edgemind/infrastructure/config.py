@@ -60,6 +60,7 @@ class Settings:
 
     database_url: str
     model_id: str
+    fallback_model_id: str | None
     agent_response_timeout_seconds: float
     seed_demo_data: bool
     cors_origins: tuple[str, ...]
@@ -73,7 +74,11 @@ settings = Settings(
         "DATABASE_URL",
         "postgresql://agent_user:agent_pass@db:5432/motor_monitor_db",
     ),
-    model_id=os.getenv("GEMINI_MODEL_ID", "gemini-3.5-flash-lite"),
+    model_id=os.getenv("GEMINI_MODEL_ID", "gemini-3.1-flash-lite"),
+    fallback_model_id=(
+        os.getenv("GEMINI_FALLBACK_MODEL_ID", "gemini-3-flash-preview").strip()
+        or None
+    ),
     agent_response_timeout_seconds=_positive_float(
         "AGENT_RESPONSE_TIMEOUT_SECONDS",
         60.0,

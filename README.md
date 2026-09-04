@@ -72,7 +72,8 @@ cd Edge-mind
 
 ```dotenv
 GEMINI_API_KEY=你的_Gemini_API_Key
-GEMINI_MODEL_ID=gemini-3.5-flash-lite
+GEMINI_MODEL_ID=gemini-3.1-flash-lite
+GEMINI_FALLBACK_MODEL_ID=gemini-3-flash-preview
 
 POSTGRES_USER=agent_user
 POSTGRES_PASSWORD=請改成高強度密碼
@@ -87,7 +88,7 @@ INFERENCE_OUTPUT_DIR=/app/outputs
 REPORT_TIMEZONE_OFFSET_HOURS=8
 ANOMALY_TEMPERATURE_THRESHOLD=35.0
 
-# Gemini 單次回應最長等待秒數
+# Gemini 單次回應最長等待秒數；主模型忙碌時會有限重試並切換備援模型
 AGENT_RESPONSE_TIMEOUT_SECONDS=60
 
 # 多個來源用逗號分隔；正式環境不要使用 *
