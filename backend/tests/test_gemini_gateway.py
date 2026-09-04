@@ -3,6 +3,7 @@
 import copy
 from types import SimpleNamespace
 import unittest
+from unittest.mock import AsyncMock, patch
 
 from edgemind.infrastructure.ai.gemini import GeminiModelGateway
 
@@ -31,6 +32,27 @@ class _FakeClient:
 
     def close(self):
         return None
+
+
+class _ModelServiceError(RuntimeError):
+    def __init__(self, code):
+        super().__init__(f"model error {code}")
+        self.code = code
+
+
+class _SequencedModels:
+    def __init__(self, results):
+        self.results = iter(results)
+        self.call_count = 0
+        self.model_ids = []
+
+    def generate_content(self, *, model, contents, config):
+        self.call_count += 1
+        self.model_ids.append(model)
+        result = next(self.results)
+        if isinstance(result, Exception):
+            raise result
+        return result
 
 
 class GeminiGatewayTests(unittest.IsolatedAsyncioTestCase):
@@ -63,6 +85,91 @@ class GeminiGatewayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             forecast_schema["properties"]["model_name"]["enum"],
             ["ridge_direct", "ridge_history"],
+        )
+
+    async def test_transient_model_error_is_retried(self):
+        settings = SimpleNamespace(
+            model_id="gemini-test",
+            agent_response_timeout_seconds=1.0,
+        )
+        response = SimpleNamespace(text="服務已恢復", function_calls=[])
+        models = _SequencedModels([_ModelServiceError(503), response])
+        gateway = GeminiModelGateway(settings)
+        gateway._client = SimpleNamespace(models=models)
+
+        with patch(
+            "edgemind.infrastructure.ai.gemini.asyncio.sleep",
+            new_callable=AsyncMock,
+        ) as sleep:
+            reply = await gateway.decide("請檢查設備")
+
+        self.assertEqual(reply.text, "服務已恢復")
+        self.assertEqual(models.call_count, 2)
+        sleep.assert_awaited_once_with(0.5)
+
+    async def test_exhausted_transient_errors_return_friendly_message(self):
+        settings = SimpleNamespace(
+            model_id="gemini-test",
+            agent_response_timeout_seconds=1.0,
+        )
+        models = _SequencedModels([_ModelServiceError(503) for _ in range(3)])
+        gateway = GeminiModelGateway(settings)
+        gateway._client = SimpleNamespace(models=models)
+
+        with patch(
+            "edgemind.infrastructure.ai.gemini.asyncio.sleep",
+            new_callable=AsyncMock,
+        ), self.assertRaisesRegex(RuntimeError, "所有可用模型皆已自動重試"):
+            await gateway.decide("請檢查設備")
+
+        self.assertEqual(models.call_count, 3)
+
+    async def test_non_transient_model_error_is_not_retried(self):
+        settings = SimpleNamespace(
+            model_id="gemini-test",
+            agent_response_timeout_seconds=1.0,
+        )
+        models = _SequencedModels([_ModelServiceError(400)])
+        gateway = GeminiModelGateway(settings)
+        gateway._client = SimpleNamespace(models=models)
+
+        with patch(
+            "edgemind.infrastructure.ai.gemini.asyncio.sleep",
+            new_callable=AsyncMock,
+        ) as sleep, self.assertRaisesRegex(_ModelServiceError, "400"):
+            await gateway.decide("請檢查設備")
+
+        self.assertEqual(models.call_count, 1)
+        sleep.assert_not_awaited()
+
+    async def test_fallback_model_is_used_after_primary_stays_busy(self):
+        settings = SimpleNamespace(
+            model_id="gemini-primary",
+            fallback_model_id="gemini-fallback",
+            agent_response_timeout_seconds=1.0,
+        )
+        response = SimpleNamespace(text="備援服務正常", function_calls=[])
+        models = _SequencedModels(
+            [_ModelServiceError(503) for _ in range(3)] + [response]
+        )
+        gateway = GeminiModelGateway(settings)
+        gateway._client = SimpleNamespace(models=models)
+
+        with patch(
+            "edgemind.infrastructure.ai.gemini.asyncio.sleep",
+            new_callable=AsyncMock,
+        ):
+            reply = await gateway.decide("請檢查設備")
+
+        self.assertEqual(reply.text, "備援服務正常")
+        self.assertEqual(
+            models.model_ids,
+            [
+                "gemini-primary",
+                "gemini-primary",
+                "gemini-primary",
+                "gemini-fallback",
+            ],
         )
 
 

@@ -85,6 +85,7 @@ export default function App() {
             <MessageList
               messages={messages}
               endRef={messagesEndRef}
+              isLoading={isLoading}
               onRetry={retryLastMessage}
             />
             <Composer
