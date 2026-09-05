@@ -11,7 +11,7 @@ from urllib.parse import quote
 CHART_TITLES = {
     "04_baseline_mae.svg": "MAE 基準模型比較",
     "05_anomaly_f1.svg": "F1 異常偵測比較",
-    "06_error_metrics.svg": "五特徵模型誤差指標",
+    "06_error_metrics.svg": "模型誤差指標",
     "01_actual_vs_predicted.svg": "實際與預測溫度",
     "02_error_curve.svg": "各觀測點預測誤差",
     "03_error_distribution.svg": "預測誤差分佈",

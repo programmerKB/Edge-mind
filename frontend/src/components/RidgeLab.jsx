@@ -11,6 +11,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import ReportGallery from './ReportGallery.jsx';
 import {
   loadRidgeLabConfig,
   runRidgeExperiment,
@@ -173,6 +174,7 @@ export default function RidgeLab() {
 
   async function handleForecast() {
     setForecasting(true);
+    setForecast(null);
     setError('');
     try {
       setForecast(await runRidgeForecast({
@@ -275,7 +277,7 @@ export default function RidgeLab() {
               </label>
               <button className="ridge-secondary-button" onClick={handleForecast} disabled={!forecastMotor || forecasting}>
                 <TrendingUp size={17} />
-                {forecasting ? '正在預測…' : '預測 30 分鐘後'}
+                {forecasting ? '正在預測並產生報表…' : '預測 30 分鐘後'}
               </button>
             </div>
             {forecast && (
@@ -296,6 +298,22 @@ export default function RidgeLab() {
                   <span>目標時間</span>
                   <strong>{formatTime(forecast.target_time)}</strong>
                 </div>
+              </div>
+            )}
+            {forecast?.artifacts && (
+              <div className="ridge-forecast-report" aria-live="polite">
+                <div className="ridge-result-meta">
+                  <span>{forecast.model_label} · {forecast.feature_count} 特徵</span>
+                  <span>歷史回測 {forecast.evaluation.completed_samples.toLocaleString()} 筆</span>
+                  <span>回測 MAE {formatMetric(forecast.evaluation.mae)} °C</span>
+                  <span>回測 RMSE {formatMetric(forecast.evaluation.rmse)} °C</span>
+                  <span>鎖定測試 MAE {formatMetric(forecast.test_metrics.mae)} °C</span>
+                </div>
+                <p className="ridge-report-note">{forecast.evaluation_note}</p>
+                <div className="ridge-artifact-path">
+                  報表已寫入 <code>{forecast.artifacts.run_directory}</code>
+                </div>
+                <ReportGallery attachments={forecast.attachments} />
               </div>
             )}
           </section>

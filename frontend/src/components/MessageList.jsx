@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import ReportGallery from './ReportGallery.jsx';
 
 const STATUS_META = {
   thought: { icon: Sparkles, label: '分析中', className: 'thinking' },
@@ -41,36 +42,6 @@ function StatusMessage({ message, active, onRetry }) {
         <span className="typing-dots"><i /><i /><i /></span>
       )}
     </div>
-  );
-}
-
-/** Render browser-safe chart URLs supplied by the backend artifact API. */
-function ReportGallery({ attachments }) {
-  if (!attachments?.length) return null;
-
-  return (
-    <section className="report-attachments" aria-label="模型評估圖表">
-      <h3><Images size={17} />模型評估圖表</h3>
-      <div className="report-gallery">
-        {attachments.map((attachment) => (
-          <figure className="report-chart" key={attachment.url}>
-            <a
-              href={attachment.url}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`開啟${attachment.title}完整圖表`}
-            >
-              <img
-                src={attachment.url}
-                alt={attachment.alt || attachment.title}
-                loading="lazy"
-              />
-            </a>
-            <figcaption>{attachment.title}</figcaption>
-          </figure>
-        ))}
-      </div>
-    </section>
   );
 }
 

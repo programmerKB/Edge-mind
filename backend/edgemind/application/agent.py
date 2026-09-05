@@ -113,14 +113,18 @@ class AgentService:
                 if attachments:
                     yield AgentEvent(
                         "artifacts",
-                        f"後端已產生 {len(attachments)} 張模型評估圖表。",
+                        f"後端已產生 {len(attachments)} 張模型評估圖表。"
+                        + (
+                            f"\n{payload['evaluation_note']}"
+                            if payload.get("evaluation_note") else ""
+                        ),
                         attachments,
                     )
                 tool_results.append({"name": call.name, "result": payload})
 
             yield AgentEvent(
                 "thought",
-                "正在統整邊緣感測數據並生成報告...",
+                "正在統整邊緣感測數據並撰寫診斷說明...",
             )
             text = await self._model.summarize(message, tool_results)
             yield AgentEvent("success", text)

@@ -18,6 +18,7 @@ from edgemind.domain.evaluation import (
 from edgemind.domain.forecasting import (
     FORECAST_HORIZON_MINUTES,
     RIDGE_ALPHA,
+    TrainingExample,
     build_training_examples,
     predict_with_payload,
 )
@@ -88,7 +89,55 @@ def create_inference_report(
     model_inference_duration_ms: float,
     process_cpu_time_ms: float,
 ) -> dict:
-    """Create one timestamped folder containing CSV, SVG, and JSON outputs."""
+    """Evaluate the original five-feature model and write its report."""
+    training_examples = build_training_examples(training_records)
+    evaluation_examples = build_training_examples(inference_records)
+    temperature_model = train_temperature_baseline(training_examples, RIDGE_ALPHA)
+    methods = {
+        "Persistence": [float(example.features[0]) for example in evaluation_examples],
+        "Temperature-only Ridge": [
+            predict_temperature_baseline(temperature_model, float(example.features[0]))
+            for example in evaluation_examples
+        ],
+        "Five-feature Ridge": [
+            predict_with_payload(model_payload, example.features)
+            for example in evaluation_examples
+        ],
+    }
+    return write_inference_report(
+        context=context,
+        inference_records=inference_records,
+        evaluation_examples=evaluation_examples,
+        methods=methods,
+        main_method="Five-feature Ridge",
+        model_payload={**model_payload, "model_name": "ridge_direct", "model_label": "Direct Ridge"},
+        inference_motor_id=inference_motor_id,
+        training_motor_id=training_motor_id,
+        latest_prediction=latest_prediction,
+        latest_source_time=inference_records[-1].recorded_at,
+        generated_at=generated_at,
+        model_inference_duration_ms=model_inference_duration_ms,
+        process_cpu_time_ms=process_cpu_time_ms,
+    )
+
+
+def write_inference_report(
+    *,
+    context: ReportContext,
+    inference_records: Sequence[Any],
+    evaluation_examples: Sequence[TrainingExample],
+    methods: dict[str, list[float]],
+    main_method: str,
+    model_payload: dict,
+    inference_motor_id: str,
+    training_motor_id: str,
+    latest_prediction: float,
+    latest_source_time: datetime,
+    generated_at: datetime,
+    model_inference_duration_ms: float,
+    process_cpu_time_ms: float,
+) -> dict:
+    """Write shared CSV/SVG outputs from the selected model's predictions."""
     local_time = aware_datetime(generated_at).astimezone(context.timezone)
     run_directory = (
         context.root
@@ -102,28 +151,14 @@ def create_inference_report(
     for directory in (csv_directory, chart_directory, metadata_directory):
         directory.mkdir(parents=True, exist_ok=False)
 
-    training_examples = build_training_examples(training_records)
-    evaluation_examples = build_training_examples(inference_records)
-    temperature_model = train_temperature_baseline(training_examples, RIDGE_ALPHA)
-
-    five_feature_predictions = [
-        predict_with_payload(model_payload, example.features)
-        for example in evaluation_examples
-    ]
-    temperature_predictions = [
-        predict_temperature_baseline(temperature_model, float(example.features[0]))
-        for example in evaluation_examples
-    ]
-    persistence_predictions = [
-        float(example.features[0]) for example in evaluation_examples
-    ]
+    main_predictions = methods[main_method]
     actuals = [float(example.target_temperature) for example in evaluation_examples]
     generated_iso = iso_datetime(generated_at)
 
     prediction_rows = []
     for example, prediction, actual in zip(
         evaluation_examples,
-        five_feature_predictions,
+        main_predictions,
         actuals,
     ):
         error = prediction - actual
@@ -131,6 +166,7 @@ def create_inference_report(
             {
                 "設備編號": inference_motor_id,
                 "訓練資料集": training_motor_id,
+                "模型": model_payload["model_label"],
                 "預測產生時間": generated_iso,
                 "來源資料時間": iso_datetime(example.source_time),
                 "預測目標時間": iso_datetime(example.target_time),
@@ -142,16 +178,16 @@ def create_inference_report(
             }
         )
 
-    latest = inference_records[-1]
-    latest_target = aware_datetime(latest.recorded_at) + timedelta(
+    latest_target = aware_datetime(latest_source_time) + timedelta(
         minutes=FORECAST_HORIZON_MINUTES
     )
     prediction_rows.append(
         {
             "設備編號": inference_motor_id,
             "訓練資料集": training_motor_id,
+            "模型": model_payload["model_label"],
             "預測產生時間": generated_iso,
-            "來源資料時間": iso_datetime(latest.recorded_at),
+            "來源資料時間": iso_datetime(latest_source_time),
             "預測目標時間": iso_datetime(latest_target),
             "預測溫度_C": round(latest_prediction, 6),
             "30分鐘後實際溫度_C": "",
@@ -163,20 +199,17 @@ def create_inference_report(
     predictions_csv = csv_directory / "predictions.csv"
     write_csv(predictions_csv, tuple(prediction_rows[0]), prediction_rows)
 
-    methods = {
-        "Persistence": persistence_predictions,
-        "Temperature-only Ridge": temperature_predictions,
-        "Five-feature Ridge": five_feature_predictions,
-    }
     regression = {
         name: regression_metrics(predictions, actuals)
         for name, predictions in methods.items()
     }
-    main_metrics = regression["Five-feature Ridge"]
+    main_metrics = regression[main_method]
     metrics_rows = [
         {
             "設備編號": inference_motor_id,
             "訓練資料集": training_motor_id,
+            "模型": model_payload["model_label"],
+            "評估方式": "完整模型歷史回測",
             "完成真值樣本數": main_metrics["sample_count"],
             "MAE_C": rounded(main_metrics["mae"]),
             "中位數絕對誤差_C": rounded(main_metrics["median_absolute_error"]),
@@ -278,7 +311,7 @@ def create_inference_report(
     ]
     signed_errors = [
         prediction - actual
-        for prediction, actual in zip(five_feature_predictions, actuals)
+        for prediction, actual in zip(main_predictions, actuals)
     ]
     actual_chart = chart_directory / "01_actual_vs_predicted.svg"
     error_chart = chart_directory / "02_error_curve.svg"
@@ -289,24 +322,24 @@ def create_inference_report(
     system_chart = chart_directory / "07_system_performance.svg"
     write_line_chart(
         actual_chart,
-        "Actual vs Predicted Temperature",
+        f"{model_payload['model_label']}: Actual vs Predicted",
         (
             ("Actual", actuals, "#0f766e"),
-            ("Predicted", five_feature_predictions, "#2563eb"),
+            ("Predicted", main_predictions, "#2563eb"),
         ),
         source_labels,
         "Temperature (C)",
     )
     write_line_chart(
         error_chart,
-        "Prediction Error by Observation",
+        f"{model_payload['model_label']}: Prediction Error",
         (("Prediction - Actual", signed_errors, "#dc2626"),),
         source_labels,
         "Error (C)",
     )
     write_histogram(
         distribution_chart,
-        "Prediction Error Distribution",
+        f"{model_payload['model_label']}: Error Distribution",
         signed_errors,
     )
     regression_chart_rows = [
@@ -330,7 +363,7 @@ def create_inference_report(
     )
     write_bar_chart(
         metrics_chart,
-        "Five-feature Ridge Error Metrics",
+        f"{main_method} Error Metrics",
         ("MAE", "RMSE", "Max error"),
         (
             (
@@ -365,6 +398,7 @@ def create_inference_report(
     system_rows = [
         {
             "模型訓練時間_ms": rounded(model_payload.get("training_duration_ms")),
+            "模型": model_payload["model_label"],
             "單次模型推論時間_ms": round(model_inference_duration_ms, 6),
             "Agent工具呼叫正確率": "尚未建立人工標註集",
             "Agent回答與資料一致率": "尚未建立人工標註集",
@@ -408,6 +442,16 @@ def create_inference_report(
         "local_generated_at": local_time.isoformat(),
         "training_motor_id": training_motor_id,
         "inference_motor_id": inference_motor_id,
+        "model_name": model_payload["model_name"],
+        "model_label": model_payload["model_label"],
+        "model": model_payload,
+        "evaluation_scope": "historical_backtest",
+        "evaluation_note": (
+            "圖表為完整模型在預測設備歷史資料上的回測；"
+            "同設備回測包含訓練資料，不等同鎖定測試集成績。"
+        ),
+        "source_recorded_at": iso_datetime(latest_source_time),
+        "target_time": iso_datetime(latest_target),
         "latest_prediction_c": round(latest_prediction, 6),
         "latest_actual_status": "pending",
         "completed_evaluation_samples": len(actuals),

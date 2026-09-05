@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Protocol, Sequence
 
 from edgemind.domain.entities import SensorReading
+from edgemind.domain.ridge_experiments import RidgeParameters
 
 
 class SensorRepository(Protocol):
@@ -100,7 +101,25 @@ class ReportQueryGateway(Protocol):
 
 
 class RidgeExperimentReportGateway(Protocol):
-    """Persist and retrieve compact dual-Ridge experiment reports."""
+    """Persist dual-Ridge experiments and live forecast reports."""
+
+    def create_ridge_inference_report(
+        self,
+        *,
+        training_records: Sequence[SensorReading],
+        inference_records: Sequence[SensorReading],
+        parameters: RidgeParameters,
+        forecast: dict,
+        training_duration_ms: float,
+        model_inference_duration_ms: float,
+        process_cpu_time_ms: float,
+    ) -> dict:
+        """Write CSV, SVG, and metadata using the selected live Ridge model."""
+        ...
+
+    def finalize_forecast_result(self, result: dict) -> dict:
+        """Attach performance aggregation and public chart metadata."""
+        ...
 
     def save_ridge_experiment(self, result: dict) -> dict:
         """Write structured results and tabular predictions to disk."""
