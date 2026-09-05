@@ -21,6 +21,7 @@ from edgemind.infrastructure.reporting.ridge_experiments import (
     get_ridge_experiment,
     save_ridge_experiment,
 )
+from edgemind.infrastructure.reporting.ridge_inference import create_ridge_inference_report
 
 
 class FilesystemReportGateway:
@@ -33,6 +34,10 @@ class FilesystemReportGateway:
     def create_inference_report(self, **kwargs) -> dict:
         """Generate one inference report with the injected runtime context."""
         return create_inference_report(context=self._context, **kwargs)
+
+    def create_ridge_inference_report(self, **kwargs) -> dict:
+        """Generate live Ridge reports with the same artifact contract."""
+        return create_ridge_inference_report(context=self._context, **kwargs)
 
     def finalize_forecast_result(self, result: dict) -> dict:
         """Attach aggregate performance metadata and browser-safe chart URLs."""

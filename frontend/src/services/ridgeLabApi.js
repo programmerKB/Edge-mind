@@ -33,8 +33,8 @@ export function runRidgeExperiment(trainingMotorId, evaluationMotorId) {
   });
 }
 
-export function runRidgeForecast({ motorId, trainingMotorId, modelName }) {
-  return request('/forecasts', {
+export async function runRidgeForecast({ motorId, trainingMotorId, modelName }) {
+  const forecast = await request('/forecasts', {
     method: 'POST',
     body: JSON.stringify({
       motor_id: motorId,
@@ -42,4 +42,11 @@ export function runRidgeForecast({ motorId, trainingMotorId, modelName }) {
       model_name: modelName,
     }),
   });
+  return {
+    ...forecast,
+    attachments: (forecast.attachments || []).map((attachment) => ({
+      ...attachment,
+      url: new URL(attachment.url, baseUrl).toString(),
+    })),
+  };
 }

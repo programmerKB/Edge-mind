@@ -396,6 +396,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .ridge-forecast-result span { color: #858a86; font-size: 11px; }
 .ridge-forecast-result strong { color: #303531; font-size: 14px; overflow-wrap: anywhere; }
 .ridge-forecast-result > div:first-child strong { color: var(--green-deep); font-size: 23px; }
+.ridge-report-note { margin: 12px 0 0; color: #737874; font-size: 12px; line-height: 1.7; }
 .ridge-error { position: sticky; bottom: 18px; margin: 16px auto 0; padding: 12px 15px; color: #9f3434; background: #fff4f2; border: 1px solid #f1d2ce; border-radius: 11px; font-size: 13px; }
 .ridge-loading { display: grid; place-items: center; flex: 1; color: #727773; font-size: 14px; }
 
