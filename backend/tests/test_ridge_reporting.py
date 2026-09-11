@@ -16,12 +16,12 @@ from fastapi.testclient import TestClient
 from edgemind.application.agent import AgentService
 from edgemind.application.diagnostics import DiagnosticToolService
 from edgemind.application.forecasts import ForecastService
-from edgemind.application.ridge_lab import RidgeLabService
+from edgemind.application.ridge_forecasts import RidgeForecastService
 from edgemind.application.sensors import SensorService
 from edgemind.domain.ridge_experiments import DIRECT_MODEL, HISTORY_MODEL
 from edgemind.infrastructure.reporting.context import ReportContext
 from edgemind.infrastructure.reporting.gateway import FilesystemReportGateway
-from edgemind.presentation.api.routes import artifacts, chat, ridge_lab
+from edgemind.presentation.api.router import create_api_router
 from test_ridge_experiments import sensor_history
 
 
@@ -67,22 +67,44 @@ class RidgeForecastReportingTests(unittest.TestCase):
         reports = FilesystemReportGateway(ReportContext(
             root=self.root, timezone=timezone.utc, anomaly_temperature_threshold=33.0,
         ))
-        service = RidgeLabService(reports)
-        tools = DiagnosticToolService(uow_factory, ForecastService(reports), service, SensorService())
+        self.uow_factory = uow_factory
+        self.ridge_forecasts = RidgeForecastService(reports)
+        forecasts = ForecastService(reports)
+        sensors = SensorService()
+        tools = DiagnosticToolService(uow_factory, forecasts, self.ridge_forecasts, sensors)
         self.model = _SummaryModel()
         app = FastAPI()
-        app.include_router(ridge_lab.create_router(service, uow_factory))
-        app.include_router(artifacts.create_router(reports))
-        app.include_router(chat.create_router(AgentService(self.model, tools)))
+        app.include_router(create_api_router(SimpleNamespace(
+            uow_factory=uow_factory,
+            forecasts=forecasts,
+            sensors=sensors,
+            reports=reports,
+            agent=AgentService(self.model, tools),
+        )))
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
 
     def forecast(self, model_name=HISTORY_MODEL):
-        response = self.client.post("/api/ridge-lab/forecasts", json={
-            "motor_id": "DEMO-2", "training_motor_id": "DEMO-1", "model_name": model_name,
-        })
-        self.assertEqual(response.status_code, 201, response.text)
-        return response.json()
+        with self.uow_factory() as uow:
+            return self.ridge_forecasts.forecast(
+                uow,
+                motor_id="DEMO-2",
+                training_motor_id="DEMO-1",
+                model_name=model_name,
+            )
+
+    def test_existing_rest_training_and_forecast_still_publish_charts(self):
+        training = self.client.post("/api/predictions/train/DEMO-1")
+        self.assertEqual(training.status_code, 200, training.text)
+        response = self.client.get(
+            "/api/predictions/temperature/DEMO-2",
+            params={"training_motor_id": "DEMO-1", "auto_train": "false"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()
+        self.assertEqual(result["motor_id"], "DEMO-2")
+        self.assertEqual(result["training_motor_id"], "DEMO-1")
+        self.assert_public_charts(result["attachments"])
 
     def assert_public_charts(self, attachments):
         self.assertEqual(len(attachments), 7)

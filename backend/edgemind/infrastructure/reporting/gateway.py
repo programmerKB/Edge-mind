@@ -17,10 +17,6 @@ from edgemind.infrastructure.reporting.io import export_demo_datasets
 from edgemind.infrastructure.reporting.performance import (
     finalize_performance_report,
 )
-from edgemind.infrastructure.reporting.ridge_experiments import (
-    get_ridge_experiment,
-    save_ridge_experiment,
-)
 from edgemind.infrastructure.reporting.ridge_inference import create_ridge_inference_report
 
 
@@ -80,11 +76,3 @@ class FilesystemReportGateway:
             inference_records,
             self._context.root,
         )
-
-    def save_ridge_experiment(self, result: dict) -> dict:
-        """Persist one dual-Ridge comparison in a dated result directory."""
-        return save_ridge_experiment(self._context, result)
-
-    def get_ridge_experiment(self, experiment_id: str) -> dict | None:
-        """Read one prior dual-Ridge comparison by its stable identifier."""
-        return get_ridge_experiment(self._context, experiment_id)
