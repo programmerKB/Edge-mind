@@ -8,6 +8,7 @@ import {
   normalizeAttachments,
 } from '../models/chatMessage.js';
 import { streamChat } from '../services/chatApi.js';
+import { createId } from '../utils/createId.js';
 
 /** Return all state and actions required by the chat page. */
 export function useChat(inferenceModel = 'ridge_direct') {
@@ -57,7 +58,7 @@ export function useChat(inferenceModel = 'ridge_direct') {
     ]);
     setIsLoading(true);
 
-    const requestId = crypto.randomUUID();
+    const requestId = createId();
     const controller = new AbortController();
     activeRequestRef.current = { requestId, controller };
 
