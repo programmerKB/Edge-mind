@@ -5,6 +5,7 @@
  */
 
 import { resolveApiUrl } from '../config.js';
+import { createId } from '../utils/createId.js';
 
 /**
  * Build the UI's immutable message shape.
@@ -15,7 +16,7 @@ import { resolveApiUrl } from '../config.js';
  */
 export function createMessage(role, content, status, attachments = []) {
   return {
-    id: crypto.randomUUID(),
+    id: createId(),
     role,
     content,
     ...(status ? { status } : {}),
