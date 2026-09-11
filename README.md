@@ -21,7 +21,7 @@ EdgeMind 是一套面向工業馬達與邊緣設備的 AI 診斷系統。它整�
 
 - 查詢設備最新溫度、濕度、XYZ 三軸加速度與震動狀態。
 - 使用五項感測特徵預測 30 分鐘後的設備溫度。
-- 在「雙 Ridge 實驗」中公平比較當下特徵與最近 60 分鐘歷史摘要。
+- 在設備診斷聊天中選擇 `Direct Ridge` 或使用最近 60 分鐘特徵摘要的 `Ridge + History`。
 - 支援以 A 設備訓練模型，再用該模型推論 B 設備。
 - 提供 MAE、MSE、RMSE、R²、MAPE 與誤差中位數等回歸指標。
 - 提供混淆矩陣、Precision、Recall、Specificity、F1、ROC-AUC 與 PR-AUC 等異常偵測指標。
@@ -129,7 +129,7 @@ docker compose logs --tail=100 frontend
 
 後端會執行確定性的預測工具，先透過 SSE 回傳執行狀態與 SVG 圖表附件，再由 Gemini 根據真實工具結果整理繁體中文說明。
 
-設備診斷頁上方的「溫度推論」可選擇 `Direct Ridge` 或 `Ridge + History`；此選擇會隨聊天請求送到後端，並強制套用在 Agent 的溫度預測工具。若要比較模型，從左側選擇「Direct Ridge vs 歷史」；選好訓練設備與選填的外部評估設備後，即可執行完整時間切分實驗或產生最新預測。
+設備診斷頁上方的「溫度推論」可選擇 `Direct Ridge` 或 `Ridge + History`；此選擇會隨聊天請求送到後端，並強制套用在 Agent 的溫度預測工具。
 
 ### REST API
 
@@ -204,6 +204,7 @@ bootstrap 是唯一可以同時組裝所有層的 composition root
 │   │   ├── application/
 │   │   │   ├── ports.py        # Repository、UoW、報表與模型抽象
 │   │   │   ├── forecasts.py    # 訓練／推論 use cases
+│   │   │   ├── ridge_forecasts.py # 聊天共用的 Ridge 歷史推論與報表
 │   │   │   ├── sensors.py      # 感測寫入／查詢 use cases
 │   │   │   ├── diagnostics.py  # Agent 可呼叫的診斷工具
 │   │   │   ├── agent.py        # Transport-neutral Agent orchestration
@@ -284,18 +285,18 @@ EdgeMind 為每個訓練設備保存獨立模型，避免不同機台的負載�
 
 合成資料上的低誤差不等於真實設備準確度。上線前必須使用每台設備的真實歷史資料重新訓練與驗證。
 
-### 雙 Ridge 實驗
+### 聊天推論模型
 
 | 模型 | 輸入 |
 | --- | --- |
 | Direct Ridge | 預測起點當下的溫度、濕度、X／Y／Z，共 5 項 |
 | Ridge + History | 最近 60 分鐘各感測項目的現值、均值、標準差、最小值、最大值、變化量與斜率，共 35 項 |
 
-兩個模型使用完全相同的有效樣本，依時間做 60%／20%／20% 訓練、驗證、測試切分；切分間保留 30 分鐘 purge gap。驗證集只從 `0.01`、`0.1`、`1.0` 選擇 Ridge α，模型優劣則以鎖定測試集的 MAE 判定。若指定另一設備，另列零樣本外部評估，不混入訓練。
+在設備診斷頁上方選擇模型後，即可用聊天執行預測。`Ridge + History` 保留依時間做 60%／20%／20% 訓練、驗證、測試切分的流程；切分間保留 30 分鐘 purge gap，並使用驗證集從 `0.01`、`0.1`、`1.0` 選擇 Ridge α。
 
 ## 推論報表與圖表
 
-設備診斷聊天的 `Direct Ridge`、`Ridge + History`，以及 Ridge Lab「最新預測」的兩種模型，每次推論都會依設定時區建立獨立輸出資料夾，包含五份 CSV、七張 SVG 與 JSON 摘要：
+設備診斷聊天的 `Direct Ridge`、`Ridge + History`，每次推論都會依設定時區建立獨立輸出資料夾，包含五份 CSV、七張 SVG 與 JSON 摘要：
 
 ```text
 backend/outputs/
@@ -318,10 +319,6 @@ backend/outputs/
 │   │   ├── 06_error_metrics.svg
 │   │   └── 07_system_performance.svg
 │   └── metadata/run_summary.json
-├── ridge_experiments/YYYY-MM-DD/HH-MM-SS-ffffff_ID/
-│   ├── result.json
-│   ├── model_comparison.csv
-│   └── test_predictions.csv
 ├── performance/
 │   ├── performance_history.csv
 │   ├── performance_summary.csv
@@ -333,9 +330,9 @@ CSV 使用帶 BOM 的 UTF-8，可直接用 Excel 開啟。已有 30 分鐘後真
 
 REST 預測回應會包含 `attachments`；聊天流程則以 `status: "artifacts"` 的 SSE 事件傳送相同附件。附件只傳安全的後端 URL，不傳 base64，前端收到後即可顯示 SVG。
 
-Ridge Lab 的「最新預測」也會顯示報表圖庫、回測樣本數、MAE／RMSE 與輸出目錄；圖表可點擊開啟完整尺寸。CSV 與 JSON 會記錄實際模型名稱，History 報表使用同一次訓練得到的 35 特徵模型與完整歷史視窗，不會套用五特徵模型的預測。
+聊天中的報表圖表可點擊開啟完整尺寸。CSV 與 JSON 會記錄實際模型名稱，History 報表使用同一次訓練得到的 35 特徵模型與完整歷史視窗，不會套用五特徵模型的預測。
 
-推論圖表呈現完整模型在預測設備歷史資料上的回測，同設備回測會包含訓練資料；這與鎖定測試集評估不同。Ridge Lab 回應及 JSON 的模型資訊另保留原本的 `validation_metrics`、`test_metrics`，最新預測尚無真值時不計入回測指標。若只有足夠預測的歷史視窗、尚無可回測的真值，仍輸出報表，回歸指標留空並顯示無已完成觀測的圖表。
+推論圖表呈現完整模型在預測設備歷史資料上的回測，同設備回測會包含訓練資料；這與鎖定測試集評估不同。`Ridge + History` 工具結果及 JSON 的模型資訊另保留原本的 `validation_metrics`、`test_metrics`，最新預測尚無真值時不計入回測指標。若只有足夠預測的歷史視窗、尚無可回測的真值，仍輸出報表，回歸指標留空並顯示無已完成觀測的圖表。
 
 系統會記錄 Training、Inference 時間與資源量測，再以所有已完成執行計算平均值、中位數、標準差、最小值、最大值及 P90／P95／P99。相同執行重複完成時會更新原紀錄，不會增加虛假的樣本數。
 
@@ -343,14 +340,11 @@ Ridge Lab 的「最新預測」也會顯示報表圖庫、回測樣本數、MAE�
 
 | 方法 | 路徑 | 用途 |
 | --- | --- | --- |
+| GET | `/api/health` | 檢查 API 與感測資料庫是否就緒 |
 | POST | `/api/chat_utf8` | Gemini Agent SSE 聊天 |
 | POST | `/api/sensor-readings` | 寫入完整感測資料 |
 | POST | `/api/predictions/train/{motor_id}` | 訓練並保存設備模型 |
 | GET | `/api/predictions/temperature/{motor_id}` | 預測 30 分鐘後溫度；可指定 `training_motor_id` |
-| GET | `/api/ridge-lab/config` | 取得雙 Ridge 方法與目前各設備資料量 |
-| POST | `/api/ridge-lab/experiments` | 執行並保存 Direct／History Ridge 比較 |
-| GET | `/api/ridge-lab/experiments/{id}` | 讀取已保存的實驗摘要 |
-| POST | `/api/ridge-lab/forecasts` | 使用指定 Ridge 版本預測 30 分鐘後溫度 |
 | GET | `/api/performance/summary` | 取得跨執行效能統計 |
 | GET | `/api/report-artifacts/{path}` | 讀取預測附件中的 SVG 圖表 |
 
@@ -440,14 +434,14 @@ cp .env.example .env
 ./deploy.sh deploy
 ```
 
-腳本會檢查必要設定、建置 images、啟動服務並從後端與 Nginx `/api` 代理各做一次 smoke test。預設入口為 <http://localhost:5173>，後端只綁定主機的 `127.0.0.1:8000`，PostgreSQL 不公開連接埠。
+腳本會檢查必要設定、建置 images、啟動服務並從後端與 Nginx `/api/health` 代理各做一次 smoke test。預設入口為 <http://localhost:5173>，後端只綁定主機的 `127.0.0.1:8000`，PostgreSQL 不公開連接埠。
 
 ```bash
 ./deploy.sh status   # 查看容器與健康狀態
 ./deploy.sh smoke    # 再次檢查前後端
 ./deploy.sh logs     # 追蹤服務日誌
 ./deploy.sh restart  # 重啟應用服務
-./deploy.sh stop     # 停止但保留資料庫與實驗輸出
+./deploy.sh stop     # 停止但保留資料庫與推論報表
 ```
 
 可在 `.env` 以 `APP_PORT` 與 `BACKEND_PORT` 修改主機端連接埠。正式模式使用 [`docker-compose.prod.yml`](./docker-compose.prod.yml)；原本的 `docker-compose.yml` 繼續作為本機開發環境。
@@ -464,7 +458,6 @@ http://192.168.1.50:5173
 
 ```dotenv
 VITE_API_URL=http://192.168.1.50:8000/api/chat_utf8
-VITE_RIDGE_LAB_API_URL=http://192.168.1.50:8000/api/ridge-lab
 ```
 
 這種分離部署模式也必須允許 API 連接埠。行動裝置中的 `127.0.0.1` 指向裝置本身，不是部署主機。

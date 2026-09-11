@@ -100,8 +100,8 @@ class ReportQueryGateway(Protocol):
         ...
 
 
-class RidgeExperimentReportGateway(Protocol):
-    """Persist dual-Ridge experiments and live forecast reports."""
+class RidgeForecastReportGateway(Protocol):
+    """Publish live Ridge forecast reports."""
 
     def create_ridge_inference_report(
         self,
@@ -119,14 +119,6 @@ class RidgeExperimentReportGateway(Protocol):
 
     def finalize_forecast_result(self, result: dict) -> dict:
         """Attach performance aggregation and public chart metadata."""
-        ...
-
-    def save_ridge_experiment(self, result: dict) -> dict:
-        """Write structured results and tabular predictions to disk."""
-        ...
-
-    def get_ridge_experiment(self, experiment_id: str) -> dict | None:
-        """Read a previously saved experiment when it exists."""
         ...
 
 

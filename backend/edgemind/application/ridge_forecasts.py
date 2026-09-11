@@ -1,84 +1,28 @@
-"""Use cases for comparing and applying the two compact Ridge variants."""
+"""Live Ridge forecasting shared by diagnostic tools and report generation."""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import time
-from uuid import uuid4
 
-from edgemind.application.ports import RidgeExperimentReportGateway, UnitOfWork
+from edgemind.application.ports import RidgeForecastReportGateway, UnitOfWork
 from edgemind.domain.forecasting import ForecastError
 from edgemind.domain.ridge_experiments import (
     DIRECT_MODEL,
     FORECAST_HORIZON_MINUTES,
     HISTORY_MODEL,
     MODEL_LABELS,
-    experiment_configuration,
     latest_history_features,
     predict_ridge,
-    run_ridge_experiment,
     train_for_live_forecast,
 )
 
 
-class RidgeLabService:
-    """Coordinate sensor persistence, pure experiments, and result files."""
+class RidgeForecastService:
+    """Coordinate live Ridge inference and its CSV/SVG reports."""
 
-    def __init__(self, reports: RidgeExperimentReportGateway):
+    def __init__(self, reports: RidgeForecastReportGateway):
         self._reports = reports
-
-    def configuration(self, uow: UnitOfWork) -> dict:
-        """Describe the fixed experiment and currently available devices."""
-        return {
-            **experiment_configuration(),
-            "devices": uow.sensors.list_device_summaries(),
-        }
-
-    def run_experiment(
-        self,
-        uow: UnitOfWork,
-        *,
-        training_motor_id: str,
-        evaluation_motor_id: str | None = None,
-    ) -> dict:
-        """Compare both models and persist one reproducible report."""
-        training_records = uow.sensors.list_readings(training_motor_id)
-        if not training_records:
-            raise ForecastError(f"資料庫中找不到設備 {training_motor_id} 的感測資料")
-        external_motor_id = (
-            evaluation_motor_id
-            if evaluation_motor_id and evaluation_motor_id != training_motor_id
-            else None
-        )
-        external_records = (
-            uow.sensors.list_readings(external_motor_id)
-            if external_motor_id
-            else None
-        )
-        if external_motor_id and not external_records:
-            raise ForecastError(
-                f"資料庫中找不到外部評估設備 {external_motor_id} 的感測資料"
-            )
-        result = run_ridge_experiment(
-            training_records,
-            external_records=external_records,
-        )
-        result.update(
-            {
-                "experiment_id": uuid4().hex,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "training_motor_id": training_motor_id,
-                "evaluation_motor_id": external_motor_id,
-            }
-        )
-        return self._reports.save_ridge_experiment(result)
-
-    def get_experiment(self, experiment_id: str) -> dict:
-        """Return a saved experiment or a domain-level not-found error."""
-        result = self._reports.get_ridge_experiment(experiment_id)
-        if result is None:
-            raise ForecastError(f"找不到實驗 {experiment_id}")
-        return result
 
     def forecast(
         self,

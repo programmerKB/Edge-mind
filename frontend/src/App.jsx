@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Composer from './components/Composer.jsx';
 import MessageList from './components/MessageList.jsx';
-import RidgeLab from './components/RidgeLab.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import Topbar from './components/Topbar.jsx';
 import Welcome from './components/Welcome.jsx';
@@ -13,7 +12,6 @@ import './App.css';
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeView, setActiveView] = useState('chat');
   const [inferenceModel, setInferenceModel] = useState('ridge_direct');
   const messagesEndRef = useRef(null);
   const {
@@ -36,12 +34,6 @@ export default function App() {
 
   const startNewChat = () => {
     newChat();
-    setActiveView('chat');
-    setSidebarOpen(false);
-  };
-
-  const openView = (view) => {
-    setActiveView(view);
     setSidebarOpen(false);
   };
 
@@ -53,23 +45,18 @@ export default function App() {
         onClose={() => setSidebarOpen(false)}
         onToggle={() => setSidebarCollapsed((value) => !value)}
         onNewChat={startNewChat}
-        activeView={activeView}
-        onOpenChat={() => openView('chat')}
-        onOpenRidgeLab={() => openView('ridgeLab')}
+        onOpenChat={() => setSidebarOpen(false)}
         hasMessages={hasMessages}
       />
       <main className="main-panel">
         <Topbar
           onOpenMenu={() => setSidebarOpen(true)}
-          mode={activeView === 'ridgeLab' ? '雙 Ridge 實驗' : '設備診斷'}
-          inferenceModel={activeView === 'chat' ? inferenceModel : undefined}
-          onInferenceModelChange={activeView === 'chat' ? setInferenceModel : undefined}
+          inferenceModel={inferenceModel}
+          onInferenceModelChange={setInferenceModel}
           inferenceModelDisabled={isLoading}
         />
 
-        {activeView === 'ridgeLab' ? (
-          <RidgeLab />
-        ) : !hasMessages ? (
+        {!hasMessages ? (
           <div className="empty-state">
             <Welcome onSuggestion={sendMessage} />
             <Composer

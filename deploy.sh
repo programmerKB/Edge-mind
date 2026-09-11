@@ -112,11 +112,11 @@ smoke_test() {
   app_port="$(env_value APP_PORT 5173)"
   backend_port="$(env_value BACKEND_PORT 8000)"
 
-  if ! wait_for_url "後端 API" "http://127.0.0.1:${backend_port}/api/ridge-lab/config" 30; then
+  if ! wait_for_url "後端 API" "http://127.0.0.1:${backend_port}/api/health" 30; then
     printf '\033[1;31m[error]\033[0m 後端 API 在等待時間內未就緒\n' >&2
     return 1
   fi
-  if ! wait_for_url "前端與 API 代理" "http://127.0.0.1:${app_port}/api/ridge-lab/config" 30; then
+  if ! wait_for_url "前端與 API 代理" "http://127.0.0.1:${app_port}/api/health" 30; then
     printf '\033[1;31m[error]\033[0m 前端或 /api 代理在等待時間內未就緒\n' >&2
     return 1
   fi
@@ -139,7 +139,7 @@ deploy() {
   local app_port
   app_port="$(env_value APP_PORT 5173)"
   success "EdgeMind 部署完成：http://localhost:${app_port}"
-  info "實驗輸出位置：${SCRIPT_DIR}/backend/outputs/ridge_experiments"
+  info "推論報表位置：${SCRIPT_DIR}/backend/outputs/inference_runs"
 }
 
 main() {
