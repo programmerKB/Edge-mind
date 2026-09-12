@@ -110,6 +110,8 @@ docker compose ps
 - Swagger API：<http://localhost:8000/docs>
 - Backend：<http://localhost:8000>
 
+開發模式的 PostgreSQL `5432` 與後端 `8000` 只綁定主機的 `127.0.0.1`；前端 `5173` 保持對外綁定，方便 Windows 主機或區域網路裝置連入 VM，並由前端代理 `/api` 請求。
+
 若服務未正常啟動：
 
 ```bash
@@ -426,7 +428,7 @@ npm run dev
 
 ### 使用 Docker Compose 正式部署
 
-正式模式使用 Nginx 提供靜態前端、以不含 `--reload` 的 Uvicorn 執行 FastAPI，並為 PostgreSQL 與後端設定健康檢查。PostgreSQL 不會公開主機連接埠，後端預設只綁定主機的 `127.0.0.1:8000`。
+正式模式使用非 root Nginx 提供靜態前端、以非 root 且不含 `--reload` 的 Uvicorn 執行 FastAPI，並為 PostgreSQL 與後端設定健康檢查。PostgreSQL 不會公開主機連接埠，後端預設只綁定主機的 `127.0.0.1:8000`。
 
 第一次部署前，建立環境設定：
 
@@ -458,6 +460,8 @@ docker compose --profile production up -d \
 ```
 
 必須明確列出這三個 production 服務；若省略服務名稱，Compose 也會選入預設的開發服務，造成主機連接埠衝突。
+
+開發與正式 PostgreSQL 分別使用 `postgres_dev_data` 與 `postgres_prod_data`，不會掛載同一份資料目錄。若專案曾使用舊版共用的 `postgres_data`，請先依下方「舊版資料 volume 遷移」完成遷移，再啟動更新後的服務。
 
 檢查容器與服務健康狀態：
 
@@ -538,6 +542,23 @@ ORDER BY motor_id;
 
 輸入 `\q` 離開 PostgreSQL。
 
+### 舊版資料 volume 遷移
+
+只有從仍使用 `postgres_data` 的舊版設定升級時才需要執行一次。先停止服務，以唯讀方式掛載舊 volume，並將內容複製到新的開發 volume：
+
+```bash
+docker compose down
+docker compose create db
+docker run --rm \
+  --mount type=volume,src=my_agent_project_postgres_data,dst=/source,readonly \
+  --mount type=volume,src=my_agent_project_postgres_dev_data,dst=/target \
+  alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b \
+  sh -c 'cp -a /source/. /target/'
+docker compose up -d --build
+```
+
+確認開發資料完整後，再自行移除舊的 `my_agent_project_postgres_data`。不要把舊 volume 複製到 `postgres_prod_data` 當作正式資料；正式資料應從經過確認的備份還原。
+
 ### 備份與還原
 
 備份：
@@ -554,7 +575,7 @@ docker compose --profile production exec -T db-prod \
   psql -U agent_user -d motor_monitor_db < motor_monitor_backup.sql
 ```
 
-`docker compose --profile production down` 不會刪除 PostgreSQL volume。不要加上 `-v` 當成一般重啟；`docker compose down -v` 會刪除資料庫 volume。
+`docker compose --profile production down` 不會刪除 PostgreSQL volume。不要加上 `-v` 當成一般重啟；`docker compose down -v` 會刪除開發與正式環境各自的資料庫 volume。
 
 ### 正式部署基線
 
@@ -565,6 +586,7 @@ docker compose --profile production exec -T db-prod \
 - 前端使用 production build 與正式 Web Server。
 - 後端停用 Uvicorn `--reload`。
 - 不對外公開 PostgreSQL 5432。
+- 定期更新並重新鎖定 Docker 基礎映像的版本與 digest，以取得安全修補。
 - 啟用 HTTPS、登入、授權與 rate limit。
 - 使用 secret manager 保存 API Key 與資料庫密碼。
 - 加入健康檢查、監控、告警、自動備份與還原演練。

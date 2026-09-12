@@ -4,13 +4,11 @@
 #   docker compose --profile production up -d --build db-prod backend-prod frontend-prod
 
 x-database: &database
-  image: postgres:16-alpine
+  image: postgres:16.15-alpine3.24@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
   environment:
     POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
-  volumes:
-    - postgres_data:/var/lib/postgresql/data
   healthcheck:
     test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
     interval: 5s
@@ -38,7 +36,9 @@ services:
     container_name: agent-postgres
     restart: always
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
 
   backend:
     build:
@@ -47,7 +47,7 @@ services:
     container_name: agent-fastapi
     restart: always
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app
     env_file:
@@ -79,6 +79,8 @@ services:
     <<: *database
     profiles: [production]
     restart: unless-stopped
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
     networks:
       default:
         aliases:
@@ -117,10 +119,11 @@ services:
       target: production
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-5173}:80"
+      - "${APP_PORT:-5173}:8080"
     depends_on:
       backend-prod:
         condition: service_healthy
 
 volumes:
-  postgres_data:
+  postgres_dev_data:
+  postgres_prod_data:
