@@ -1,21 +1,49 @@
-#version: '3.8'
+# Development is the default mode:
+#   docker compose up -d --build
+# Production uses the services behind the production profile:
+#   docker compose --profile production up -d --build db-prod backend-prod frontend-prod
+
+x-database: &database
+  image: postgres:16-alpine
+  environment:
+    POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+  volumes:
+    - postgres_data:/var/lib/postgresql/data
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+    interval: 5s
+    timeout: 5s
+    retries: 12
+    start_period: 10s
+
+x-backend-healthcheck: &backend-healthcheck
+  test:
+    - CMD
+    - python
+    - -c
+    - >-
+      import urllib.request;
+      urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)
+  interval: 10s
+  timeout: 5s
+  retries: 12
+  start_period: 20s
 
 services:
+  # Default local-development stack.
   db:
-    image: postgres:16-alpine
+    <<: *database
     container_name: agent-postgres
     restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: agent-fastapi
     restart: always
     ports:
@@ -24,23 +52,75 @@ services:
       - ./backend:/app
     env_file:
       - .env
-    # Bind-mounted development code uses reload; the image default omits it.
     command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
     container_name: agent-frontend
     restart: always
     ports:
       - "5173:5173"
     volumes:
       - ./frontend:/app
-      - /app/node_modules # 保護容器內的套件不被外部覆寫
+      - /app/node_modules
     environment:
       VITE_PROXY_TARGET: http://backend:8000
     depends_on:
       - backend
+
+  # Production stack. Start these three services explicitly with the profile.
+  db-prod:
+    <<: *database
+    profiles: [production]
+    restart: unless-stopped
+    networks:
+      default:
+        aliases:
+          - db
+
+  backend-prod:
+    profiles: [production]
+    image: edgemind-backend:prod
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      INFERENCE_OUTPUT_DIR: /app/outputs
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend/outputs:/app/outputs
+    depends_on:
+      db-prod:
+        condition: service_healthy
+    healthcheck: *backend-healthcheck
+    networks:
+      default:
+        aliases:
+          - backend
+
+  frontend-prod:
+    profiles: [production]
+    image: edgemind-frontend:prod
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-5173}:80"
+    depends_on:
+      backend-prod:
+        condition: service_healthy
+
 volumes:
   postgres_data:
