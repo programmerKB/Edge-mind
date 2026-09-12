@@ -424,27 +424,75 @@ npm run dev
 
 ## 部署與維運
 
-### Production 部署腳本
+### 使用 Docker Compose 正式部署
 
-正式部署使用 Nginx 靜態前端、無 `--reload` 的 FastAPI、內網 PostgreSQL 與容器健康檢查。第一次使用：
+正式模式使用 Nginx 提供靜態前端、以不含 `--reload` 的 Uvicorn 執行 FastAPI，並為 PostgreSQL 與後端設定健康檢查。PostgreSQL 不會公開主機連接埠，後端預設只綁定主機的 `127.0.0.1:8000`。
+
+第一次部署前，建立環境設定：
 
 ```bash
 cp .env.example .env
-# 編輯 .env，填入 Gemini key、資料庫密碼與相同密碼的 DATABASE_URL
-./deploy.sh deploy
+# 編輯 .env，填入 Gemini API Key、資料庫密碼，
+# 並確認 DATABASE_URL 使用相同密碼與 db:5432。
 ```
 
-腳本會檢查必要設定、建置 images、啟動服務並從後端與 Nginx `/api/health` 代理各做一次 smoke test。預設入口為 <http://localhost:5173>，後端只綁定主機的 `127.0.0.1:8000`，PostgreSQL 不公開連接埠。
+先確認 Compose 設定正確：
 
 ```bash
-./deploy.sh status   # 查看容器與健康狀態
-./deploy.sh smoke    # 再次檢查前後端
-./deploy.sh logs     # 追蹤服務日誌
-./deploy.sh restart  # 重啟應用服務
-./deploy.sh stop     # 停止但保留資料庫與推論報表
+docker compose --profile production config --quiet
 ```
 
-可在 `.env` 以 `APP_PORT` 與 `BACKEND_PORT` 修改主機端連接埠。正式模式使用 [`docker-compose.prod.yml`](./docker-compose.prod.yml)；原本的 `docker-compose.yml` 繼續作為本機開發環境。
+開發與正式模式會使用相同的主機連接埠，因此切換模式前先停止目前的容器。這個指令會保留 PostgreSQL named volume 與 `backend/outputs`：
+
+```bash
+docker compose --profile production down
+```
+
+建置並啟動正式環境：
+
+```bash
+docker compose --profile production up -d \
+  --build \
+  --remove-orphans \
+  db-prod backend-prod frontend-prod
+```
+
+必須明確列出這三個 production 服務；若省略服務名稱，Compose 也會選入預設的開發服務，造成主機連接埠衝突。
+
+檢查容器與服務健康狀態：
+
+```bash
+docker compose --profile production ps
+curl --fail http://127.0.0.1:8000/api/health
+curl --fail http://127.0.0.1:5173/api/health
+```
+
+兩個健康檢查正常時都會回傳 `{"status":"ok"}`。Web UI 預設位於 <http://localhost:5173>；可在 `.env` 以 `APP_PORT` 與 `BACKEND_PORT` 修改主機端連接埠，修改後也要將上述檢查網址換成對應的連接埠。
+
+正式環境的常用維運指令：
+
+```bash
+# 查看日誌
+docker compose --profile production logs --tail=200 --follow \
+  db-prod backend-prod frontend-prod
+
+# 重新建置並套用前後端程式
+docker compose --profile production up -d --build \
+  backend-prod frontend-prod
+
+# 重啟前後端
+docker compose --profile production restart backend-prod frontend-prod
+
+# 停止服務並保留資料
+docker compose --profile production down
+```
+
+若要切回開發模式，停止正式環境後啟動預設服務：
+
+```bash
+docker compose --profile production down
+docker compose up -d --build
+```
 
 ### 區域網路存取
 
@@ -464,8 +512,17 @@ VITE_API_URL=http://192.168.1.50:8000/api/chat_utf8
 
 ### 查看資料庫
 
+開發模式：
+
 ```bash
 docker compose exec db psql -U agent_user -d motor_monitor_db
+```
+
+正式模式：
+
+```bash
+docker compose --profile production exec db-prod \
+  psql -U agent_user -d motor_monitor_db
 ```
 
 ```sql
@@ -486,18 +543,18 @@ ORDER BY motor_id;
 備份：
 
 ```bash
-docker compose exec -T db \
+docker compose --profile production exec -T db-prod \
   pg_dump -U agent_user motor_monitor_db > motor_monitor_backup.sql
 ```
 
 還原：
 
 ```bash
-docker compose exec -T db \
+docker compose --profile production exec -T db-prod \
   psql -U agent_user -d motor_monitor_db < motor_monitor_backup.sql
 ```
 
-`docker compose down` 不會刪除 PostgreSQL volume。不要將 `docker compose down -v` 當成一般重啟，它會刪除資料庫 volume。
+`docker compose --profile production down` 不會刪除 PostgreSQL volume。不要加上 `-v` 當成一般重啟；`docker compose down -v` 會刪除資料庫 volume。
 
 ### 正式部署基線
 
