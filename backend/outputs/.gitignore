@@ -1,0 +1,3 @@
+# Ignore generated inference datasets, reports, charts, and run metadata.
+*
+!.gitignore
