@@ -100,7 +100,11 @@ services:
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     volumes:
-      - ./backend/outputs:/app/outputs
+      - type: bind
+        source: ./backend/outputs
+        target: /app/outputs
+        bind:
+          create_host_path: false
     depends_on:
       db-prod:
         condition: service_healthy
