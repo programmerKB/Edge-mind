@@ -79,6 +79,7 @@ export function useChat(inferenceModel = 'ridge_direct') {
               event.content,
               event.status,
               normalizeAttachments(event.attachments),
+              event.token_usage,
             ),
           ]);
         },

@@ -9,7 +9,7 @@ import json
 from google import genai
 from google.genai import types
 
-from edgemind.application.agent import ModelReply, ToolCall
+from edgemind.application.agent import ModelReply, TokenUsage, ToolCall
 from edgemind.infrastructure.config import AGENT_SYSTEM_INSTRUCTION, Settings
 
 
@@ -76,6 +76,38 @@ def _model_error_status_code(error: Exception) -> int | None:
         return int(code) if code is not None else None
     except (TypeError, ValueError):
         return None
+
+
+def _response_token_usage(response) -> TokenUsage | None:
+    """Translate Gemini usage metadata without estimating from text length."""
+    metadata = getattr(response, "usage_metadata", None)
+    if metadata is None:
+        return None
+
+    def count(attribute: str) -> int:
+        value = getattr(metadata, attribute, 0)
+        return int(value or 0)
+
+    prompt_tokens = count("prompt_token_count")
+    output_tokens = count("candidates_token_count")
+    thought_tokens = count("thoughts_token_count")
+    tool_prompt_tokens = count("tool_use_prompt_token_count")
+    reported_total = count("total_token_count")
+    return TokenUsage(
+        prompt_tokens=prompt_tokens,
+        output_tokens=output_tokens,
+        thought_tokens=thought_tokens,
+        cached_tokens=count("cached_content_token_count"),
+        tool_prompt_tokens=tool_prompt_tokens,
+        total_tokens=(
+            reported_total
+            or prompt_tokens
+            + output_tokens
+            + thought_tokens
+            + tool_prompt_tokens
+        ),
+        model_calls=1,
+    )
 
 
 class GeminiModelGateway:
@@ -153,9 +185,13 @@ class GeminiModelGateway:
             ToolCall(call.name, dict(call.args or {}))
             for call in (response.function_calls or ())
         )
-        return ModelReply(text=response.text or "", tool_calls=calls)
+        return ModelReply(
+            text=response.text or "",
+            tool_calls=calls,
+            token_usage=_response_token_usage(response),
+        )
 
-    async def summarize(self, message: str, tool_results: list[dict]) -> str:
+    async def summarize(self, message: str, tool_results: list[dict]) -> ModelReply:
         """Generate a grounded Traditional-Chinese answer from tool results."""
         prompt = (
             f"原始問題：{message}\n\n"
@@ -177,7 +213,10 @@ class GeminiModelGateway:
         )
         if not response.text:
             raise RuntimeError("模型服務未產生文字摘要")
-        return response.text
+        return ModelReply(
+            text=response.text,
+            token_usage=_response_token_usage(response),
+        )
 
     async def close(self) -> None:
         """Release transports owned by the SDK during shutdown."""

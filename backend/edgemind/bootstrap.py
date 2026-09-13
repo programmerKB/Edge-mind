@@ -48,7 +48,7 @@ def create_container() -> ApplicationContainer:
     sensors = SensorService()
     tools = DiagnosticToolService(uow_factory, forecasts, ridge_forecasts, sensors)
     model = GeminiModelGateway(settings)
-    agent = AgentService(model, tools)
+    agent = AgentService(model, tools, reports)
     return ApplicationContainer(
         uow_factory=uow_factory,
         reports=reports,

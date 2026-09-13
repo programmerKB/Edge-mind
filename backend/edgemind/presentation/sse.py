@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 import json
 
 from edgemind.application.agent import AgentEvent
@@ -18,5 +19,7 @@ def encode_sse_event(
     }
     if event.attachments:
         payload["attachments"] = event.attachments
+    if event.token_usage is not None:
+        payload["token_usage"] = asdict(event.token_usage)
     serialized = json.dumps(payload, ensure_ascii=ensure_ascii)
     return f"data: {serialized}\n\n"

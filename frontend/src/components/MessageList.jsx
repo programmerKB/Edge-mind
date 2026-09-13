@@ -59,6 +59,35 @@ function ArtifactMessage({ message }) {
   );
 }
 
+/** Render token counts reported by Gemini for this complete interaction. */
+function TokenUsage({ usage }) {
+  if (!usage) return null;
+
+  const format = (value) => Number(value || 0).toLocaleString('zh-TW');
+  const optionalItems = [
+    ['思考', usage.thought_tokens],
+    ['快取', usage.cached_tokens],
+    ['工具提示', usage.tool_prompt_tokens],
+  ].filter(([, value]) => value > 0);
+
+  return (
+    <div
+      className="token-usage"
+      aria-label={`Gemini Token 總計 ${format(usage.total_tokens)}`}
+      title="Gemini API usage_metadata 回傳的實際用量"
+    >
+      <strong>Gemini Token</strong>
+      <span>總計 {format(usage.total_tokens)}</span>
+      <span>輸入 {format(usage.prompt_tokens)}</span>
+      <span>輸出 {format(usage.output_tokens)}</span>
+      {optionalItems.map(([label, value]) => (
+        <span key={label}>{label} {format(value)}</span>
+      ))}
+      {usage.model_calls > 1 && <span>{format(usage.model_calls)} 次模型呼叫</span>}
+    </div>
+  );
+}
+
 /** Select the appropriate renderer for one non-user timeline item. */
 function AssistantMessage({ message, active, onRetry }) {
   const [copied, setCopied] = useState(false);
@@ -94,6 +123,7 @@ function AssistantMessage({ message, active, onRetry }) {
           <ReactMarkdown>{message.content}</ReactMarkdown>
         </div>
         <ReportGallery attachments={message.attachments} />
+        <TokenUsage usage={message.tokenUsage} />
         <div className="message-actions">
           <button onClick={copyMessage}>
             {copied ? <Check size={15} /> : <Copy size={15} />}

@@ -1,13 +1,14 @@
 """Integration-style tests for generated CSV, SVG, and summary artifacts."""
 
 from datetime import datetime, timedelta, timezone
+import csv
 import json
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
 import unittest
 
-from edgemind.application.agent import AgentEvent
+from edgemind.application.agent import AgentEvent, TokenUsage
 from edgemind.domain.forecasting import (
     build_training_examples,
     predict_with_payload,
@@ -25,6 +26,7 @@ from edgemind.infrastructure.reporting.context import ReportContext
 from edgemind.infrastructure.reporting.inference import create_inference_report
 from edgemind.infrastructure.reporting.performance import (
     finalize_performance_report,
+    record_gemini_token_usage,
 )
 from edgemind.presentation.sse import encode_sse_event
 
@@ -109,12 +111,21 @@ class ReportingTests(unittest.TestCase):
                         "success",
                         "模型評估完成",
                         attachments,
+                        TokenUsage(
+                            prompt_tokens=100,
+                            output_tokens=25,
+                            total_tokens=125,
+                            model_calls=1,
+                        ),
                     ),
                     False,
                 ).removeprefix("data: ")
             )
             self.assertEqual(event_payload["status"], "success")
             self.assertEqual(len(event_payload["attachments"]), 7)
+            self.assertEqual(event_payload["token_usage"]["prompt_tokens"], 100)
+            self.assertEqual(event_payload["token_usage"]["output_tokens"], 25)
+            self.assertEqual(event_payload["token_usage"]["total_tokens"], 125)
             self.assertIn("r2_score", report["metrics"])
             self.assertIn(
                 "specificity",
@@ -131,6 +142,8 @@ class ReportingTests(unittest.TestCase):
             ).splitlines()[0]
             self.assertNotIn("報表產生時間_ms", system_header)
             self.assertNotIn("API處理時間_ms", system_header)
+            self.assertIn("Gemini輸入Token", system_header)
+            self.assertIn("Gemini總Token", system_header)
 
             system_chart = Path(files["charts"][-1]).read_text(
                 encoding="utf-8"
@@ -161,6 +174,32 @@ class ReportingTests(unittest.TestCase):
                 files["system_csv"]
             )
             self.assertEqual(repeated["run_count"], 1)
+
+            with_usage = record_gemini_token_usage(
+                files["system_csv"],
+                {
+                    "prompt_tokens": 500,
+                    "output_tokens": 60,
+                    "thought_tokens": 20,
+                    "cached_tokens": 100,
+                    "tool_prompt_tokens": 5,
+                    "total_tokens": 585,
+                    "model_calls": 2,
+                },
+            )
+            with Path(files["system_csv"]).open(
+                encoding="utf-8-sig",
+                newline="",
+            ) as stream:
+                system_usage = next(csv.DictReader(stream))
+            self.assertEqual(system_usage["Gemini輸入Token"], "500")
+            self.assertEqual(system_usage["Gemini輸出Token"], "60")
+            self.assertEqual(system_usage["Gemini總Token"], "585")
+            self.assertEqual(with_usage["run_count"], 1)
+            self.assertEqual(
+                with_usage["metrics"]["gemini_total_tokens"]["mean"],
+                585.0,
+            )
 
             second_report = create_inference_report(
                 context=context,

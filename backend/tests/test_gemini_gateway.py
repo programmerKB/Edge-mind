@@ -23,6 +23,14 @@ class _CapturingModels:
                     args={"motor_id": "M2"},
                 )
             ],
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=120,
+                candidates_token_count=8,
+                thoughts_token_count=4,
+                cached_content_token_count=20,
+                tool_use_prompt_token_count=3,
+                total_token_count=135,
+            ),
         )
 
 
@@ -71,6 +79,13 @@ class GeminiGatewayTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(reply.tool_calls[0].name, "get_motor_status")
         self.assertEqual(reply.tool_calls[0].arguments, {"motor_id": "M2"})
+        self.assertEqual(reply.token_usage.prompt_tokens, 120)
+        self.assertEqual(reply.token_usage.output_tokens, 8)
+        self.assertEqual(reply.token_usage.thought_tokens, 4)
+        self.assertEqual(reply.token_usage.cached_tokens, 20)
+        self.assertEqual(reply.token_usage.tool_prompt_tokens, 3)
+        self.assertEqual(reply.token_usage.total_tokens, 135)
+        self.assertEqual(reply.token_usage.model_calls, 1)
         config = client.models.config
         self.assertTrue(config.automatic_function_calling.disable)
         declarations = config.tools[0].function_declarations
@@ -171,6 +186,35 @@ class GeminiGatewayTests(unittest.IsolatedAsyncioTestCase):
                 "gemini-fallback",
             ],
         )
+
+    async def test_summarize_returns_text_and_reported_token_usage(self):
+        settings = SimpleNamespace(
+            model_id="gemini-test",
+            agent_response_timeout_seconds=1.0,
+        )
+        response = SimpleNamespace(
+            text="設備目前正常。",
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=200,
+                candidates_token_count=12,
+                thoughts_token_count=None,
+                cached_content_token_count=None,
+                tool_use_prompt_token_count=None,
+                total_token_count=212,
+            ),
+        )
+        gateway = GeminiModelGateway(settings)
+        gateway._client = SimpleNamespace(models=_SequencedModels([response]))
+
+        reply = await gateway.summarize(
+            "設備狀態如何？",
+            [{"name": "get_motor_status", "result": {"status": "normal"}}],
+        )
+
+        self.assertEqual(reply.text, "設備目前正常。")
+        self.assertEqual(reply.token_usage.prompt_tokens, 200)
+        self.assertEqual(reply.token_usage.output_tokens, 12)
+        self.assertEqual(reply.token_usage.total_tokens, 212)
 
 
 if __name__ == "__main__":

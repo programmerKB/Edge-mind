@@ -1,13 +1,23 @@
 """Tests that the chat UI's Ridge selection controls tool execution."""
 
-from edgemind.application.agent import AgentService, ModelReply, ToolCall
+from edgemind.application.agent import (
+    AgentService,
+    ModelReply,
+    TokenUsage,
+    ToolCall,
+)
 from edgemind.domain.ridge_experiments import DIRECT_MODEL, HISTORY_MODEL
 import unittest
 
 
 class _FakeModel:
-    def __init__(self, reply: ModelReply | None = None):
+    def __init__(
+        self,
+        reply: ModelReply | None = None,
+        summary_usage: TokenUsage | None = None,
+    ):
         self.reply = reply or ModelReply(text="不需要工具")
+        self.summary_usage = summary_usage
         self.decide_calls = 0
         self.tool_results = None
 
@@ -15,9 +25,12 @@ class _FakeModel:
         self.decide_calls += 1
         return self.reply
 
-    async def summarize(self, message: str, tool_results: list[dict]) -> str:
+    async def summarize(self, message: str, tool_results: list[dict]) -> ModelReply:
         self.tool_results = tool_results
-        return "已根據指定模型完成診斷。"
+        return ModelReply(
+            text="已根據指定模型完成診斷。",
+            token_usage=self.summary_usage,
+        )
 
     async def close(self) -> None:
         return None
@@ -38,6 +51,14 @@ class _CapturingTools:
                 else "Direct Ridge"
             ),
         }
+
+
+class _CapturingUsageGateway:
+    def __init__(self):
+        self.records = []
+
+    def record_token_usage(self, tool_results, usage):
+        self.records.append((tool_results, usage))
 
 
 class AgentModelSelectionTests(unittest.IsolatedAsyncioTestCase):
@@ -95,6 +116,51 @@ class AgentModelSelectionTests(unittest.IsolatedAsyncioTestCase):
             model.tool_results[0]["result"]["model_name"],
             DIRECT_MODEL,
         )
+
+    async def test_success_event_accumulates_all_gemini_token_usage(self):
+        model = _FakeModel(
+            ModelReply(
+                tool_calls=(
+                    ToolCall(
+                        "get_temperature_forecast",
+                        {"motor_id": "DEMO-2"},
+                    ),
+                ),
+                token_usage=TokenUsage(
+                    prompt_tokens=80,
+                    output_tokens=10,
+                    total_tokens=90,
+                    model_calls=1,
+                ),
+            ),
+            summary_usage=TokenUsage(
+                prompt_tokens=320,
+                output_tokens=45,
+                thought_tokens=20,
+                total_tokens=385,
+                model_calls=1,
+            ),
+        )
+        usage_gateway = _CapturingUsageGateway()
+        agent = AgentService(model, _CapturingTools(), usage_gateway)
+
+        events = [
+            event
+            async for event in agent.stream(
+                "分析 DEMO-2 的未來風險",
+                DIRECT_MODEL,
+            )
+        ]
+
+        usage = events[-1].token_usage
+        self.assertIsNotNone(usage)
+        self.assertEqual(usage.prompt_tokens, 400)
+        self.assertEqual(usage.output_tokens, 55)
+        self.assertEqual(usage.thought_tokens, 20)
+        self.assertEqual(usage.total_tokens, 475)
+        self.assertEqual(usage.model_calls, 2)
+        self.assertEqual(len(usage_gateway.records), 1)
+        self.assertIs(usage_gateway.records[0][1], usage)
 
 
 if __name__ == "__main__":

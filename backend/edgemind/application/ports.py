@@ -129,12 +129,24 @@ class AgentModelGateway(Protocol):
         """Return a direct response or structured tool calls."""
         ...
 
-    async def summarize(self, message: str, tool_results: list[dict]) -> str:
-        """Create a grounded answer from completed tool payloads."""
+    async def summarize(self, message: str, tool_results: list[dict]) -> "ModelReply":
+        """Create a grounded answer and report its token usage."""
         ...
 
     async def close(self) -> None:
         """Release model-client resources."""
+        ...
+
+
+class AgentUsageGateway(Protocol):
+    """Persistence operations for model usage attached to tool reports."""
+
+    def record_token_usage(
+        self,
+        tool_results: list[dict],
+        usage: "TokenUsage",
+    ) -> None:
+        """Persist accumulated usage beside generated tool artifacts."""
         ...
 
 
