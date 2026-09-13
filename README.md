@@ -27,6 +27,7 @@ EdgeMind 是一套面向工業馬達與邊緣設備的 AI 診斷系統。它整�
 - 提供混淆矩陣、Precision、Recall、Specificity、F1、ROC-AUC 與 PR-AUC 等異常偵測指標。
 - 彙整多次推論的平均值、中位數、標準差與 P90／P95／P99 效能。
 - 後端產生 CSV 與 SVG 圖表，並透過 REST 或 SSE 將圖片附件交給前端顯示。
+- 顯示並記錄 Gemini API 實際回報的輸入、輸出、思考、快取與總 Token 用量。
 - 內建互相分離的 `DEMO-1` 訓練資料與 `DEMO-2` 推論資料，可快速驗證完整流程。
 
 ## 技術組成
@@ -132,6 +133,8 @@ docker compose logs --tail=100 frontend
 後端會執行確定性的預測工具，先透過 SSE 回傳執行狀態與 SVG 圖表附件，再由 Gemini 根據真實工具結果整理繁體中文說明。
 
 設備診斷頁上方的「溫度推論」可選擇 `Direct Ridge` 或 `Ridge + History`；此選擇會隨聊天請求送到後端，並強制套用在 Agent 的溫度預測工具。
+
+每個完成的 Gemini 回答下方會顯示該次互動的 Token 用量。數字取自 Gemini API 的 `usage_metadata`；若一次互動先由 Gemini 選擇工具、再產生工具摘要，介面會顯示兩次模型回應的加總，而非以字數估算。
 
 ### REST API
 
@@ -330,6 +333,8 @@ backend/outputs/
 
 CSV 使用帶 BOM 的 UTF-8，可直接用 Excel 開啟。已有 30 分鐘後真值的資料會標示為 `歷史回測_已取得真值`；最新預測尚未到達目標時間時，真值保持空白並標示為 `即時推論_等待真值`。
 
+聊天完成 Gemini 摘要後，該次互動的 Token 用量會回寫至同一個推論資料夾的 `csv/system_performance.csv`，欄位包括 `Gemini輸入Token`、`Gemini輸出Token`、`Gemini思考Token`、`Gemini快取Token`、`Gemini工具提示Token`、`Gemini總Token` 與 `Gemini模型呼叫次數`。跨推論的 `performance_history.csv` 與 summary 也會同步更新；僅透過 REST 執行 Ridge 推論時沒有呼叫 Gemini，因此這些欄位保持空白。
+
 REST 預測回應會包含 `attachments`；聊天流程則以 `status: "artifacts"` 的 SSE 事件傳送相同附件。附件只傳安全的後端 URL，不傳 base64，前端收到後即可顯示 SVG。
 
 聊天中的報表圖表可點擊開啟完整尺寸。CSV 與 JSON 會記錄實際模型名稱，History 報表使用同一次訓練得到的 35 特徵模型與完整歷史視窗，不會套用五特徵模型的預測。
@@ -351,6 +356,26 @@ REST 預測回應會包含 `attachments`；聊天流程則以 `status: "artifact
 | GET | `/api/report-artifacts/{path}` | 讀取預測附件中的 SVG 圖表 |
 
 完整 request／response schema 請查看 <http://localhost:8000/docs>。
+
+聊天的最終 `status: "success"` SSE 事件會包含 `token_usage`：
+
+```json
+{
+  "status": "success",
+  "content": "Gemini 回答內容",
+  "token_usage": {
+    "prompt_tokens": 420,
+    "output_tokens": 86,
+    "thought_tokens": 24,
+    "cached_tokens": 0,
+    "tool_prompt_tokens": 0,
+    "total_tokens": 530,
+    "model_calls": 2
+  }
+}
+```
+
+`total_tokens` 優先採用 Gemini API 回報的總量；同一聊天互動內若有多次成功的模型回應，各欄位會逐一累加。暫時性錯誤或逾時沒有回應計量資料，因此不會被列入畫面上的 Token 數字。
 
 ### 寫入感測資料
 

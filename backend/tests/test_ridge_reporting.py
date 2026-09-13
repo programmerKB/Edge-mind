@@ -13,7 +13,7 @@ from xml.etree import ElementTree
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from edgemind.application.agent import AgentService
+from edgemind.application.agent import AgentService, ModelReply, TokenUsage
 from edgemind.application.diagnostics import DiagnosticToolService
 from edgemind.application.forecasts import ForecastService
 from edgemind.application.ridge_forecasts import RidgeForecastService
@@ -40,7 +40,16 @@ class _SummaryModel:
     async def summarize(self, message, tool_results):
         if self.error:
             raise RuntimeError("summary unavailable")
-        return "已完成溫度預測與報表輸出。"
+        return ModelReply(
+            text="已完成溫度預測與報表輸出。",
+            token_usage=TokenUsage(
+                prompt_tokens=300,
+                output_tokens=40,
+                thought_tokens=10,
+                total_tokens=350,
+                model_calls=1,
+            ),
+        )
 
 
 class RidgeForecastReportingTests(unittest.TestCase):
@@ -79,7 +88,7 @@ class RidgeForecastReportingTests(unittest.TestCase):
             forecasts=forecasts,
             sensors=sensors,
             reports=reports,
-            agent=AgentService(self.model, tools),
+            agent=AgentService(self.model, tools, reports),
         )))
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
@@ -196,6 +205,17 @@ class RidgeForecastReportingTests(unittest.TestCase):
                 self.assertEqual(len(artifact_events), 1, events)
                 self.assert_public_charts(artifact_events[0]["attachments"])
                 self.assertEqual(events[-1]["status"], "error" if summary_error else "success")
+                system_csv = Path(
+                    (self.root / "latest_run.txt").read_text()
+                ) / "csv" / "system_performance.csv"
+                system_row = read_csv(system_csv)[0]
+                if summary_error:
+                    self.assertEqual(system_row["Gemini總Token"], "")
+                else:
+                    self.assertEqual(system_row["Gemini輸入Token"], "300")
+                    self.assertEqual(system_row["Gemini輸出Token"], "40")
+                    self.assertEqual(system_row["Gemini思考Token"], "10")
+                    self.assertEqual(system_row["Gemini總Token"], "350")
                 if model_name == HISTORY_MODEL:
                     self.assertIn("不等同鎖定測試集成績", artifact_events[0]["content"])
 

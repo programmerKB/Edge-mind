@@ -24,6 +24,13 @@ HISTORY_FIELDS = (
     "feature_missing_rate_percent",
     "reading_missing_rate_percent",
     "uptime_seconds",
+    "gemini_prompt_tokens",
+    "gemini_output_tokens",
+    "gemini_thought_tokens",
+    "gemini_cached_tokens",
+    "gemini_tool_prompt_tokens",
+    "gemini_total_tokens",
+    "gemini_model_calls",
 )
 NUMERIC_FIELDS = HISTORY_FIELDS[4:]
 SYSTEM_FIELD_MAP = {
@@ -34,6 +41,22 @@ SYSTEM_FIELD_MAP = {
     "feature_missing_rate_percent": "感測特徵遺失率_percent",
     "reading_missing_rate_percent": "感測資料筆數遺失率_percent",
     "uptime_seconds": "系統連續運作時間_seconds",
+    "gemini_prompt_tokens": "Gemini輸入Token",
+    "gemini_output_tokens": "Gemini輸出Token",
+    "gemini_thought_tokens": "Gemini思考Token",
+    "gemini_cached_tokens": "Gemini快取Token",
+    "gemini_tool_prompt_tokens": "Gemini工具提示Token",
+    "gemini_total_tokens": "Gemini總Token",
+    "gemini_model_calls": "Gemini模型呼叫次數",
+}
+TOKEN_USAGE_FIELD_MAP = {
+    "prompt_tokens": "Gemini輸入Token",
+    "output_tokens": "Gemini輸出Token",
+    "thought_tokens": "Gemini思考Token",
+    "cached_tokens": "Gemini快取Token",
+    "tool_prompt_tokens": "Gemini工具提示Token",
+    "total_tokens": "Gemini總Token",
+    "model_calls": "Gemini模型呼叫次數",
 }
 
 
@@ -164,3 +187,21 @@ def finalize_performance_report(system_csv_path: str) -> dict:
         )
         temporary.replace(summary_path)
     return aggregate
+
+
+def record_gemini_token_usage(
+    system_csv_path: str,
+    usage: dict[str, int],
+) -> dict:
+    """Add Gemini usage to one run CSV and refresh aggregate statistics."""
+    path = Path(system_csv_path)
+    fields, rows = _read_csv(path)
+    if not rows:
+        raise ValueError(f"效能檔案沒有資料：{path}")
+
+    for usage_field, csv_field in TOKEN_USAGE_FIELD_MAP.items():
+        if csv_field not in fields:
+            fields.append(csv_field)
+        rows[0][csv_field] = int(usage.get(usage_field, 0) or 0)
+    _write_csv(path, fields, rows)
+    return finalize_performance_report(system_csv_path)

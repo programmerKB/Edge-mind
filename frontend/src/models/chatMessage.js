@@ -13,14 +13,22 @@ import { createId } from '../utils/createId.js';
  * @param {string} content
  * @param {string|undefined} status
  * @param {Array<object>} attachments
+ * @param {object|undefined} tokenUsage
  */
-export function createMessage(role, content, status, attachments = []) {
+export function createMessage(
+  role,
+  content,
+  status,
+  attachments = [],
+  tokenUsage,
+) {
   return {
     id: createId(),
     role,
     content,
     ...(status ? { status } : {}),
     ...(attachments.length ? { attachments } : {}),
+    ...(tokenUsage ? { tokenUsage } : {}),
   };
 }
 

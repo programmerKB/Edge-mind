@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 import json
 from pathlib import Path
 from typing import Sequence
 
+from edgemind.application.agent import TokenUsage
 from edgemind.domain.entities import SensorReading
 from edgemind.infrastructure.reporting.artifacts import (
     build_chart_attachments,
@@ -16,6 +18,7 @@ from edgemind.infrastructure.reporting.inference import create_inference_report
 from edgemind.infrastructure.reporting.io import export_demo_datasets
 from edgemind.infrastructure.reporting.performance import (
     finalize_performance_report,
+    record_gemini_token_usage,
 )
 from edgemind.infrastructure.reporting.ridge_inference import create_ridge_inference_report
 
@@ -49,6 +52,36 @@ class FilesystemReportGateway:
             self._context.root,
         )
         return result
+
+    def record_token_usage(
+        self,
+        tool_results: list[dict],
+        usage: TokenUsage,
+    ) -> None:
+        """Write accumulated Gemini usage into managed inference reports."""
+        report_root = self._context.root.resolve()
+        system_paths = {
+            item.get("result", {})
+            .get("artifacts", {})
+            .get("system_csv")
+            for item in tool_results
+        }
+        for value in system_paths:
+            if not value:
+                continue
+            path = Path(value).resolve()
+            try:
+                relative = path.relative_to(report_root)
+            except ValueError:
+                continue
+            if (
+                len(relative.parts) != 5
+                or relative.parts[0] != "inference_runs"
+                or relative.parts[-2:] != ("csv", "system_performance.csv")
+                or not path.is_file()
+            ):
+                continue
+            record_gemini_token_usage(str(path), asdict(usage))
 
     def performance_summary(self) -> dict:
         """Read aggregate inference performance without exposing file layout."""

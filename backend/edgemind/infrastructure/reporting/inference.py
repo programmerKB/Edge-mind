@@ -420,6 +420,13 @@ def write_inference_report(
                 time.monotonic() - context.process_started_at,
                 3,
             ),
+            "Gemini輸入Token": "",
+            "Gemini輸出Token": "",
+            "Gemini思考Token": "",
+            "Gemini快取Token": "",
+            "Gemini工具提示Token": "",
+            "Gemini總Token": "",
+            "Gemini模型呼叫次數": "",
         }
     ]
     system_csv = csv_directory / "system_performance.csv"
