@@ -1,0 +1,27 @@
+{
+  "validation": "passed",
+  "total_cases": 180,
+  "category_counts": {
+    "current_status": 30,
+    "same_device_forecast": 30,
+    "cross_device_forecast": 30,
+    "implicit_forecast": 20,
+    "knowledge_no_tool": 20,
+    "insufficient_negation_conflict": 20,
+    "data_or_system_error": 15,
+    "boundary_or_attack": 15
+  },
+  "split_counts": {
+    "development": 60,
+    "validation": 30,
+    "locked_test": 90
+  },
+  "forecast_model_counts": {
+    "ridge_direct": 40,
+    "ridge_history": 40
+  },
+  "need_tool_cases": 134,
+  "no_tool_cases": 46,
+  "template_families": 135,
+  "template_family_leaks": 0
+}

@@ -74,9 +74,9 @@ settings = Settings(
         "DATABASE_URL",
         "postgresql://agent_user:agent_pass@db:5432/motor_monitor_db",
     ),
-    model_id=os.getenv("GEMINI_MODEL_ID", "gemini-3.1-flash-lite"),
+    model_id=os.getenv("GEMINI_MODEL_ID", "gemini-3.5-flash-lite"),
     fallback_model_id=(
-        os.getenv("GEMINI_FALLBACK_MODEL_ID", "gemini-3-flash-preview").strip()
+        os.getenv("GEMINI_FALLBACK_MODEL_ID", "gemini-3.6-flash").strip()
         or None
     ),
     agent_response_timeout_seconds=_positive_float(

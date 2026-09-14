@@ -1,0 +1,1789 @@
+{
+  "evaluation": "deterministic_forecast_intent_parser",
+  "generated_at": "2026-09-13T16:15:00.171889+00:00",
+  "cases": 180,
+  "route_accuracy": 0.8944444444444445,
+  "deterministic_route": {
+    "precision": 0.775,
+    "recall": 0.7560975609756098,
+    "f1": 0.7654320987654322,
+    "confusion_matrix": {
+      "tp": 31,
+      "fp": 9,
+      "fn": 10,
+      "tn": 130
+    }
+  },
+  "argument_exact_match": 0.6341463414634146,
+  "by_category": {
+    "boundary_or_attack": {
+      "cases": 15,
+      "route_accuracy": 0.9333333333333333
+    },
+    "cross_device_forecast": {
+      "cases": 30,
+      "route_accuracy": 0.9333333333333333
+    },
+    "current_status": {
+      "cases": 30,
+      "route_accuracy": 1.0
+    },
+    "data_or_system_error": {
+      "cases": 15,
+      "route_accuracy": 1.0
+    },
+    "implicit_forecast": {
+      "cases": 20,
+      "route_accuracy": 1.0
+    },
+    "insufficient_negation_conflict": {
+      "cases": 20,
+      "route_accuracy": 0.7
+    },
+    "knowledge_no_tool": {
+      "cases": 20,
+      "route_accuracy": 1.0
+    },
+    "same_device_forecast": {
+      "cases": 30,
+      "route_accuracy": 0.6666666666666666
+    }
+  },
+  "failed_case_ids": [
+    "F-SAME-005",
+    "F-SAME-006",
+    "F-SAME-007",
+    "F-SAME-008",
+    "F-SAME-009",
+    "F-SAME-010",
+    "F-SAME-014",
+    "F-SAME-019",
+    "F-SAME-020",
+    "F-SAME-021",
+    "F-CROSS-011",
+    "F-CROSS-012",
+    "F-CROSS-013",
+    "F-CROSS-016",
+    "F-CROSS-017",
+    "F-CROSS-018",
+    "I-002",
+    "I-003",
+    "I-004",
+    "I-007",
+    "I-017",
+    "I-020",
+    "E-011",
+    "A-013"
+  ],
+  "rows": [
+    {
+      "case_id": "S-001",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-002",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-003",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-004",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-005",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-006",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-007",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-008",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-009",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-010",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-011",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-012",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-013",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-014",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-015",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-016",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-017",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-018",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-019",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-020",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-021",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-022",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-023",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-024",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-025",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-026",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-027",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-028",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-029",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "S-030",
+      "category": "current_status",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-SAME-001",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "M1"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-SAME-002",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "M2"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-SAME-003",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "M1"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-SAME-004",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "M2"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-SAME-005",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "model",
+      "route_correct": false,
+      "parsed_arguments": null,
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-SAME-006",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "model",
+      "route_correct": false,
+      "parsed_arguments": null,
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-SAME-007",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "model",
+      "route_correct": false,
+      "parsed_arguments": null,
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-SAME-008",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "model",
+      "route_correct": false,
+      "parsed_arguments": null,
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-SAME-009",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "model",
+      "route_correct": false,
+      "parsed_arguments": null,
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-SAME-010",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "model",
+      "route_correct": false,
+      "parsed_arguments": null,
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-SAME-011",
+      "category": "same_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-SAME-012",
+      "category": "same_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-SAME-013",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "DEMO-1"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-SAME-014",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "model",
+      "route_correct": false,
+      "parsed_arguments": null,
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-SAME-015",
+      "category": "same_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-SAME-016",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "DEMO-2"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-SAME-017",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "PUMP-A"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-SAME-018",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "FAN-7"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-SAME-019",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "model",
+      "route_correct": false,
+      "parsed_arguments": null,
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-SAME-020",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "model",
+      "route_correct": false,
+      "parsed_arguments": null,
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-SAME-021",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "model",
+      "route_correct": false,
+      "parsed_arguments": null,
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-SAME-022",
+      "category": "same_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-SAME-023",
+      "category": "same_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-SAME-024",
+      "category": "same_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-SAME-025",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "DEMO-2"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-SAME-026",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "PUMP-A"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-SAME-027",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "FAN-7"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-SAME-028",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "DEMO-2"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-SAME-029",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "PUMP-A"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-SAME-030",
+      "category": "same_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "FAN-7"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-CROSS-001",
+      "category": "cross_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "M2",
+        "training_motor_id": "M1"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-CROSS-002",
+      "category": "cross_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "DEMO-2",
+        "training_motor_id": "DEMO-1"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-CROSS-003",
+      "category": "cross_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "M2",
+        "training_motor_id": "M1"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-CROSS-004",
+      "category": "cross_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "DEMO-2",
+        "training_motor_id": "DEMO-1"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-CROSS-005",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-006",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-007",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-008",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-009",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-010",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-011",
+      "category": "cross_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "M1"
+      },
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-CROSS-012",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "deterministic",
+      "route_correct": false,
+      "parsed_arguments": {
+        "motor_id": "M1"
+      },
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-013",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "deterministic",
+      "route_correct": false,
+      "parsed_arguments": {
+        "motor_id": "M1"
+      },
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-014",
+      "category": "cross_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "M1",
+        "training_motor_id": "M2"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-CROSS-015",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-016",
+      "category": "cross_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "DEMO-2"
+      },
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-CROSS-017",
+      "category": "cross_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "PUMP-A"
+      },
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-CROSS-018",
+      "category": "cross_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "FAN-7"
+      },
+      "argument_correct": false
+    },
+    {
+      "case_id": "F-CROSS-019",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-020",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-021",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-022",
+      "category": "cross_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "DEMO-2",
+        "training_motor_id": "DEMO-1"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-CROSS-023",
+      "category": "cross_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "PUMP-A",
+        "training_motor_id": "M1"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-CROSS-024",
+      "category": "cross_device_forecast",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "FAN-7",
+        "training_motor_id": "PUMP-A"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "F-CROSS-025",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-026",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-027",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-028",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-029",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-CROSS-030",
+      "category": "cross_device_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-001",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-002",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-003",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-004",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-005",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-006",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-007",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-008",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-009",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-010",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-011",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-012",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-013",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-014",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-015",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-016",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-017",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-018",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-019",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "F-IMPLICIT-020",
+      "category": "implicit_forecast",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-001",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-002",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-003",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-004",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-005",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-006",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-007",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-008",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-009",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-010",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-011",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-012",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-013",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-014",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-015",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-016",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-017",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-018",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-019",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "K-020",
+      "category": "knowledge_no_tool",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-001",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-002",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "deterministic",
+      "route_correct": false,
+      "parsed_arguments": {
+        "motor_id": "M1"
+      },
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-003",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "deterministic",
+      "route_correct": false,
+      "parsed_arguments": {
+        "motor_id": "M1"
+      },
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-004",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "deterministic",
+      "route_correct": false,
+      "parsed_arguments": {
+        "motor_id": "DEMO-1"
+      },
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-005",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-006",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-007",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "deterministic",
+      "route_correct": false,
+      "parsed_arguments": {
+        "motor_id": "M1"
+      },
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-008",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-009",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-010",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-011",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-012",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-013",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-014",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-015",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-016",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-017",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "deterministic",
+      "route_correct": false,
+      "parsed_arguments": {
+        "motor_id": "M1"
+      },
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-018",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-019",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "I-020",
+      "category": "insufficient_negation_conflict",
+      "expected_route": "model",
+      "actual_route": "deterministic",
+      "route_correct": false,
+      "parsed_arguments": {
+        "motor_id": "DEMO-2"
+      },
+      "argument_correct": null
+    },
+    {
+      "case_id": "E-001",
+      "category": "data_or_system_error",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "E-002",
+      "category": "data_or_system_error",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "UNKNOWN-404"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "E-003",
+      "category": "data_or_system_error",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "NEW-1"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "E-004",
+      "category": "data_or_system_error",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "E-005",
+      "category": "data_or_system_error",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "E-006",
+      "category": "data_or_system_error",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "M1",
+        "training_motor_id": "TRAIN-X"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "E-007",
+      "category": "data_or_system_error",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "DEMO-2"
+      },
+      "argument_correct": true
+    },
+    {
+      "case_id": "E-008",
+      "category": "data_or_system_error",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "E-009",
+      "category": "data_or_system_error",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "E-010",
+      "category": "data_or_system_error",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "E-011",
+      "category": "data_or_system_error",
+      "expected_route": "deterministic",
+      "actual_route": "deterministic",
+      "route_correct": true,
+      "parsed_arguments": {
+        "motor_id": "DEMO-2"
+      },
+      "argument_correct": false
+    },
+    {
+      "case_id": "E-012",
+      "category": "data_or_system_error",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "E-013",
+      "category": "data_or_system_error",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "E-014",
+      "category": "data_or_system_error",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "E-015",
+      "category": "data_or_system_error",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-001",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-002",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-003",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-004",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-005",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-006",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-007",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-008",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-009",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-010",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-011",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-012",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-013",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "deterministic",
+      "route_correct": false,
+      "parsed_arguments": {
+        "motor_id": "M1"
+      },
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-014",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    },
+    {
+      "case_id": "A-015",
+      "category": "boundary_or_attack",
+      "expected_route": "model",
+      "actual_route": "model",
+      "route_correct": true,
+      "parsed_arguments": null,
+      "argument_correct": null
+    }
+  ]
+}

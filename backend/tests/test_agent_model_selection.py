@@ -61,6 +61,54 @@ class _CapturingUsageGateway:
         self.records.append((tool_results, usage))
 
 
+class _UnavailableSummaryModel(_FakeModel):
+    async def summarize(self, message: str, tool_results: list[dict]) -> ModelReply:
+        self.tool_results = tool_results
+        raise RuntimeError("模型服務目前忙碌")
+
+
+class _ForecastResultTools:
+    def __init__(self, *, error: str | None = None):
+        self.error = error
+        self.calls = []
+
+    def execute(self, name: str, arguments: dict) -> dict:
+        self.calls.append((name, arguments))
+        if self.error:
+            return {"error": self.error}
+        return {
+            "motor_id": arguments["motor_id"],
+            "training_motor_id": arguments.get(
+                "training_motor_id", arguments["motor_id"]
+            ),
+            "model_name": arguments["model_name"],
+            "model_label": "Direct Ridge",
+            "current_temperature": 31.2,
+            "predicted_temperature": 33.6,
+            "predicted_change": 2.4,
+            "forecast_horizon_minutes": 30,
+            "evaluation": {"mae": 0.72, "rmse": 0.94},
+        }
+
+
+class _StatusResultTools:
+    def __init__(self):
+        self.calls = []
+
+    def execute(self, name: str, arguments: dict) -> dict:
+        self.calls.append((name, arguments))
+        return {
+            "motor_id": arguments["motor_id"],
+            "temperature": 31.2,
+            "humidity": 55.4,
+            "accel_x": 0.12,
+            "accel_y": 0.08,
+            "accel_z": 0.98,
+            "vibration": 0.99,
+            "status": "normal",
+        }
+
+
 class AgentModelSelectionTests(unittest.IsolatedAsyncioTestCase):
     """Keep the user-selected inference method authoritative."""
 
@@ -161,6 +209,60 @@ class AgentModelSelectionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(usage.model_calls, 2)
         self.assertEqual(len(usage_gateway.records), 1)
         self.assertIs(usage_gateway.records[0][1], usage)
+
+    async def test_tool_result_survives_unavailable_model_summary(self):
+        agent = AgentService(
+            _UnavailableSummaryModel(),
+            _ForecastResultTools(),
+        )
+
+        events = [
+            event
+            async for event in agent.stream(
+                "請預測馬達 M1 在 30 分鐘後的溫度",
+                DIRECT_MODEL,
+            )
+        ]
+
+        self.assertEqual(events[-1].status, "success")
+        self.assertIn("模型摘要服務暫時無法使用", events[-1].content)
+        self.assertIn("33.6°C", events[-1].content)
+        self.assertIn("Direct Ridge", events[-1].content)
+        self.assertIn("訓練設備：M1", events[-1].content)
+        self.assertFalse(any(event.status == "error" for event in events))
+
+    async def test_tool_error_survives_unavailable_model_summary(self):
+        agent = AgentService(
+            _UnavailableSummaryModel(),
+            _ForecastResultTools(error="設備資料不足"),
+        )
+
+        events = [
+            event
+            async for event in agent.stream(
+                "請預測馬達 M1 在 30 分鐘後的溫度",
+                HISTORY_MODEL,
+            )
+        ]
+
+        self.assertEqual(events[-1].status, "success")
+        self.assertIn("設備資料不足", events[-1].content)
+
+    async def test_explicit_status_survives_model_outage(self):
+        model = _UnavailableSummaryModel()
+        tools = _StatusResultTools()
+        agent = AgentService(model, tools)
+
+        events = [
+            event
+            async for event in agent.stream("請查詢馬達 M1 現在的溫度與狀態")
+        ]
+
+        self.assertEqual(model.decide_calls, 0)
+        self.assertEqual(tools.calls, [("get_motor_status", {"motor_id": "M1"})])
+        self.assertEqual(events[-1].status, "success")
+        self.assertIn("溫度：31.2°C", events[-1].content)
+        self.assertIn("工具判定狀態：normal", events[-1].content)
 
 
 if __name__ == "__main__":

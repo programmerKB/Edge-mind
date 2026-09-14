@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+import logging
 from typing import AsyncIterator
 
-from edgemind.application.intent import temperature_forecast_arguments
+from edgemind.application.intent import (
+    motor_status_arguments,
+    temperature_forecast_arguments,
+)
 from edgemind.application.ports import (
     AgentModelGateway,
     AgentUsageGateway,
@@ -14,6 +18,9 @@ from edgemind.application.ports import (
 )
 from edgemind.domain.forecasting import ForecastError
 from edgemind.domain.ridge_experiments import DIRECT_MODEL, MODEL_LABELS
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,11 +103,19 @@ class AgentService:
             if inference_model not in MODEL_LABELS:
                 raise ForecastError(f"不支援的推論模型：{inference_model}")
             yield AgentEvent("thought", "Agent 正在分析您的請求...")
-            direct_arguments = temperature_forecast_arguments(message)
+            direct_status_arguments = motor_status_arguments(message)
+            direct_forecast_arguments = temperature_forecast_arguments(message)
             token_usage = None
-            if direct_arguments:
+            if direct_status_arguments:
                 tool_calls = (
-                    ToolCall("get_temperature_forecast", direct_arguments),
+                    ToolCall("get_motor_status", direct_status_arguments),
+                )
+            elif direct_forecast_arguments:
+                tool_calls = (
+                    ToolCall(
+                        "get_temperature_forecast",
+                        direct_forecast_arguments,
+                    ),
                 )
             else:
                 decision = await self._model.decide(message)
@@ -169,13 +184,23 @@ class AgentService:
                 "thought",
                 "正在統整邊緣感測數據並撰寫診斷說明...",
             )
-            summary = await self._model.summarize(message, tool_results)
-            if summary.token_usage is not None:
-                token_usage = (
-                    summary.token_usage
-                    if token_usage is None
-                    else token_usage + summary.token_usage
+            try:
+                summary = await self._model.summarize(message, tool_results)
+                summary_text = summary.text
+                if summary.token_usage is not None:
+                    token_usage = (
+                        summary.token_usage
+                        if token_usage is None
+                        else token_usage + summary.token_usage
+                    )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.warning(
+                    "Model summary failed; returning grounded local summary",
+                    exc_info=True,
                 )
+                summary_text = _grounded_fallback_summary(tool_results)
             if token_usage is not None and self._usage_gateway is not None:
                 await asyncio.to_thread(
                     self._usage_gateway.record_token_usage,
@@ -184,7 +209,7 @@ class AgentService:
                 )
             yield AgentEvent(
                 "success",
-                summary.text,
+                summary_text,
                 token_usage=token_usage,
             )
         except asyncio.CancelledError:
@@ -209,3 +234,100 @@ def _observation_message(name: str, payload: dict) -> str:
             f"{payload.get('motor_id', '設備')} 的 30 分鐘溫度預測與模型評估。"
         )
     return "後端資料已取得。"
+
+
+def _display_value(value: object) -> str:
+    """Format a tool value without inventing precision or units."""
+    if isinstance(value, float):
+        return f"{value:g}"
+    return str(value)
+
+
+def _append_value(
+    lines: list[str],
+    payload: dict,
+    key: str,
+    label: str,
+    unit: str = "",
+) -> None:
+    """Append only fields actually present in a tool observation."""
+    value = payload.get(key)
+    if value is not None:
+        lines.append(f"- {label}：{_display_value(value)}{unit}")
+
+
+def _status_fallback(payload: dict) -> str:
+    """Render one status observation without model-generated diagnoses."""
+    motor_id = _display_value(payload.get("motor_id", "設備"))
+    lines = [f"### {motor_id} 即時狀態"]
+    _append_value(lines, payload, "temperature", "溫度", "°C")
+    _append_value(lines, payload, "humidity", "濕度", "%")
+    _append_value(lines, payload, "accel_x", "X 軸加速度")
+    _append_value(lines, payload, "accel_y", "Y 軸加速度")
+    _append_value(lines, payload, "accel_z", "Z 軸加速度")
+    _append_value(lines, payload, "vibration", "震動量")
+    _append_value(lines, payload, "status", "工具判定狀態")
+    _append_value(lines, payload, "recorded_at", "資料時間")
+    status = str(payload.get("status", "")).strip().lower()
+    if status in {"warning", "critical", "anomaly", "abnormal"}:
+        lines.extend(
+            [
+                "",
+                "工具狀態不是 normal，建議依現場 SOP 人工檢查並持續監測。",
+                "工具未提供故障原因，因此目前不判定特定故障。",
+            ]
+        )
+    elif status:
+        lines.extend(["", "建議依既有巡檢週期持續監測。"])
+    return "\n".join(lines)
+
+
+def _forecast_fallback(payload: dict) -> str:
+    """Render one forecast observation using only returned fields."""
+    motor_id = _display_value(payload.get("motor_id", "設備"))
+    lines = [f"### {motor_id} 溫度預測"]
+    _append_value(lines, payload, "predicted_temperature", "預測溫度", "°C")
+    _append_value(lines, payload, "current_temperature", "目前溫度", "°C")
+    _append_value(lines, payload, "predicted_change", "預測變化", "°C")
+    _append_value(lines, payload, "forecast_horizon_minutes", "預測時間", " 分鐘")
+    _append_value(lines, payload, "model_label", "推論模型")
+    if payload.get("model_label") is None:
+        _append_value(lines, payload, "model_name", "推論模型")
+    _append_value(lines, payload, "training_motor_id", "訓練設備")
+    evaluation = payload.get("evaluation")
+    if isinstance(evaluation, dict):
+        _append_value(lines, evaluation, "mae", "MAE")
+        _append_value(lines, evaluation, "rmse", "RMSE")
+        _append_value(lines, evaluation, "max_error", "Max Error")
+    note = payload.get("evaluation_note")
+    if note:
+        lines.extend(["", _display_value(note)])
+    lines.extend(
+        [
+            "",
+            "建議持續監測實際溫度，並依設備規格或現場警戒值判讀。",
+            "工具未提供警戒門檻或故障原因，因此目前不自行判定是否過熱或特定故障。",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _grounded_fallback_summary(tool_results: list[dict]) -> str:
+    """Return useful tool data when the optional model summary is unavailable."""
+    sections = [
+        "模型摘要服務暫時無法使用；以下直接整理已完成的後端工具結果。"
+    ]
+    for item in tool_results:
+        name = item.get("name")
+        payload = item.get("result")
+        if not isinstance(payload, dict):
+            sections.append("工具未回傳可讀取的資料。")
+        elif payload.get("error"):
+            sections.append(f"### 工具回報\n{payload['error']}")
+        elif name == "get_motor_status":
+            sections.append(_status_fallback(payload))
+        elif name == "get_temperature_forecast":
+            sections.append(_forecast_fallback(payload))
+        else:
+            sections.append("工具已完成，但沒有可顯示的標準欄位。")
+    return "\n\n".join(sections)
