@@ -73,8 +73,8 @@ cd Edge-mind
 
 ```dotenv
 GEMINI_API_KEY=你的_Gemini_API_Key
-GEMINI_MODEL_ID=gemini-3.1-flash-lite
-GEMINI_FALLBACK_MODEL_ID=gemini-3-flash-preview
+GEMINI_MODEL_ID=gemini-3.5-flash-lite
+GEMINI_FALLBACK_MODEL_ID=gemini-3.6-flash
 
 POSTGRES_USER=agent_user
 POSTGRES_PASSWORD=請改成高強度密碼
@@ -432,6 +432,22 @@ PYTHONPYCACHEPREFIX=/tmp/edgemind-pycache python -m compileall -q .
 ```bash
 docker compose exec backend python -m unittest discover -s tests -v
 ```
+
+### Agent 基準測試
+
+[`backend/agent_eval/README.md`](./backend/agent_eval/README.md) 說明
+EdgeMind-AgentEval 的 180 題資料集、受控工具 fixture、真實 Gemini runner、
+忠實度評分、Development／Validation／Locked Test 隔離及 `pass^k` 重複測試。
+
+```bash
+cd backend
+python -m agent_eval.cli validate
+python -m agent_eval.cli route
+```
+
+本基準的 Agent Need-tool F1 與 Ridge 報告中的 Anomaly Detection F1 是不同
+指標，不可合併解讀。Agent 實驗結果與已知的模型服務容量限制記錄於
+[`backend/agent_eval/reports/RESULTS.md`](./backend/agent_eval/reports/RESULTS.md)。
 
 ### 前端
 

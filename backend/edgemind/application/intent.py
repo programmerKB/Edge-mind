@@ -51,3 +51,48 @@ def temperature_forecast_arguments(message: str) -> dict[str, str] | None:
     if training_motor_id and training_motor_id != motor_id:
         arguments["training_motor_id"] = training_motor_id
     return arguments
+
+
+def motor_status_arguments(message: str) -> dict[str, str] | None:
+    """Extract an explicit current-status query without capturing forecasts."""
+    compact = re.sub(r"\s+", " ", message).strip()
+    current_terms = (
+        "現在",
+        "目前",
+        "當下",
+        "即時",
+        "最新",
+        "現況",
+        "狀態",
+        "健康",
+        "讀值",
+        "感測",
+        "current",
+        "latest",
+        "status",
+    )
+    if not any(term in compact.lower() for term in current_terms):
+        return None
+
+    forecast_terms = ("預測", "推論", "未來", "30分鐘", "30 分鐘", "forecast")
+    has_forecast_term = any(term in compact.lower() for term in forecast_terms)
+    negates_forecast = re.search(
+        r"(?:不要|不需|不需要|無需)\s*(?:未來\s*)?(?:預測|推論)",
+        compact,
+        flags=re.IGNORECASE,
+    )
+    if has_forecast_term and negates_forecast is None:
+        return None
+
+    patterns = (
+        rf"(?:設備|馬達)\s*(?P<device>{DEVICE_ID})",
+        rf"(?:查詢|查|取得|讀取|檢查|看)\s*(?:設備|馬達)?\s*(?P<device>{DEVICE_ID})",
+        rf"(?P<device>{DEVICE_ID}).{{0,20}}?"
+        r"(?:現在|目前|當下|即時|最新|現況|狀態|健康|讀值)",
+        rf"(?:status\s+(?:for|of)|check)\s+(?P<device>{DEVICE_ID})",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, compact, flags=re.IGNORECASE)
+        if match is not None:
+            return {"motor_id": match.group("device")}
+    return None

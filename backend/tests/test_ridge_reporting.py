@@ -204,7 +204,12 @@ class RidgeForecastReportingTests(unittest.TestCase):
                 artifact_events = [event for event in events if event["status"] == "artifacts"]
                 self.assertEqual(len(artifact_events), 1, events)
                 self.assert_public_charts(artifact_events[0]["attachments"])
-                self.assertEqual(events[-1]["status"], "error" if summary_error else "success")
+                self.assertEqual(events[-1]["status"], "success")
+                if summary_error:
+                    self.assertIn("模型摘要服務暫時無法使用", events[-1]["content"])
+                    self.assertIn("DEMO-2", events[-1]["content"])
+                    self.assertIn("預測溫度", events[-1]["content"])
+                    self.assertIn("Ridge + History", events[-1]["content"])
                 system_csv = Path(
                     (self.root / "latest_run.txt").read_text()
                 ) / "csv" / "system_performance.csv"
