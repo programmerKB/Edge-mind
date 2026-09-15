@@ -1,0 +1,254 @@
+{
+  "interpretation": "Raw metrics include model-service failures as failed tasks. Conditional metrics exclude only the explicit busy/retry-exhausted model-service error. pass^k is intentionally omitted from the conditional section and is not reportable for this run.",
+  "attempted_runs": 90,
+  "model_service_failures": 45,
+  "model_service_failure_rate": 0.5,
+  "eligible_agent_runs": 45,
+  "eligible_case_coverage": 45,
+  "failure_messages": {
+    "Agent 執行失敗：模型服務目前忙碌，所有可用模型皆已自動重試，請稍後再試。": 45
+  },
+  "by_run": {
+    "1": {
+      "attempts": 90,
+      "model_service_failures": 45,
+      "model_service_failure_rate": 0.5
+    }
+  },
+  "raw_metrics": {
+    "cases_evaluated": 90,
+    "runs_evaluated": 90,
+    "repetitions": 1,
+    "need_tool": {
+      "precision": 0.9333333333333333,
+      "recall": 0.6363636363636364,
+      "f1": 0.7567567567567568,
+      "confusion_matrix": {
+        "tp": 42,
+        "fp": 3,
+        "fn": 24,
+        "tn": 21
+      }
+    },
+    "tool_name_accuracy": 0.6363636363636364,
+    "argument_exact_match": 0.5757575757575758,
+    "argument_field_accuracy": {
+      "model_name": 0.5,
+      "motor_id": 0.6363636363636364,
+      "training_motor_id": 0.375
+    },
+    "tool_sequence_accuracy": 0.7,
+    "extra_tool_call_rate": 0.03333333333333333,
+    "route_accuracy": 0.7111111111111111,
+    "key_fact_recall": 0.47129629629629627,
+    "grounded_claim_precision": 1.0,
+    "hallucination_rate": 0.0,
+    "task_success_rate": 0.4,
+    "error_handling_accuracy": 0.2857142857142857,
+    "reliability": {
+      "pass^1": 0.4,
+      "mean_run_success": 0.4,
+      "run_success_stddev": 0.0
+    },
+    "efficiency": {
+      "mean_total_tokens": 174.6888888888889,
+      "total_tokens": 15722.0,
+      "p50_latency_ms": 3997.827,
+      "p95_latency_ms": 4409.3432999999995,
+      "mean_tool_calls": 0.5
+    },
+    "by_category": {
+      "boundary_or_attack": {
+        "runs": 8,
+        "task_success_rate": 0.25,
+        "key_fact_recall": 0.25,
+        "hallucination_rate": 0.0
+      },
+      "cross_device_forecast": {
+        "runs": 15,
+        "task_success_rate": 0.3333333333333333,
+        "key_fact_recall": 0.5166666666666667,
+        "hallucination_rate": 0.0
+      },
+      "current_status": {
+        "runs": 15,
+        "task_success_rate": 1.0,
+        "key_fact_recall": 1.0,
+        "hallucination_rate": 0.0
+      },
+      "data_or_system_error": {
+        "runs": 7,
+        "task_success_rate": 0.2857142857142857,
+        "key_fact_recall": 0.5,
+        "hallucination_rate": 0.0
+      },
+      "implicit_forecast": {
+        "runs": 10,
+        "task_success_rate": 0.0,
+        "key_fact_recall": 0.0,
+        "hallucination_rate": 0.0
+      },
+      "insufficient_negation_conflict": {
+        "runs": 10,
+        "task_success_rate": 0.1,
+        "key_fact_recall": 0.2,
+        "hallucination_rate": 0.0
+      },
+      "knowledge_no_tool": {
+        "runs": 10,
+        "task_success_rate": 0.0,
+        "key_fact_recall": 0.05,
+        "hallucination_rate": 0.0
+      },
+      "same_device_forecast": {
+        "runs": 15,
+        "task_success_rate": 0.7333333333333333,
+        "key_fact_recall": 0.7777777777777778,
+        "hallucination_rate": 0.0
+      }
+    },
+    "failed_case_ids": [
+      "A-008",
+      "A-009",
+      "A-011",
+      "A-012",
+      "A-014",
+      "A-015",
+      "E-010",
+      "E-011",
+      "E-012",
+      "E-014",
+      "E-015",
+      "F-CROSS-016",
+      "F-CROSS-017",
+      "F-CROSS-018",
+      "F-CROSS-019",
+      "F-CROSS-020",
+      "F-CROSS-021",
+      "F-CROSS-025",
+      "F-CROSS-026",
+      "F-CROSS-027",
+      "F-CROSS-030",
+      "F-IMPLICIT-011",
+      "F-IMPLICIT-012",
+      "F-IMPLICIT-013",
+      "F-IMPLICIT-014",
+      "F-IMPLICIT-015",
+      "F-IMPLICIT-016",
+      "F-IMPLICIT-017",
+      "F-IMPLICIT-018",
+      "F-IMPLICIT-019",
+      "F-IMPLICIT-020",
+      "F-SAME-019",
+      "F-SAME-020",
+      "F-SAME-021",
+      "F-SAME-029",
+      "I-011",
+      "I-013",
+      "I-014",
+      "I-015",
+      "I-016",
+      "I-017",
+      "I-018",
+      "I-019",
+      "I-020",
+      "K-011",
+      "K-012",
+      "K-013",
+      "K-014",
+      "K-015",
+      "K-016",
+      "K-017",
+      "K-018",
+      "K-019",
+      "K-020"
+    ]
+  },
+  "conditional_agent_metrics": {
+    "cases_evaluated": 45,
+    "runs_evaluated": 45,
+    "repetitions": 1,
+    "need_tool": {
+      "precision": 0.9333333333333333,
+      "recall": 1.0,
+      "f1": 0.9655172413793104,
+      "confusion_matrix": {
+        "tp": 42,
+        "fp": 3,
+        "fn": 0,
+        "tn": 0
+      }
+    },
+    "tool_name_accuracy": 1.0,
+    "argument_exact_match": 0.9047619047619048,
+    "argument_field_accuracy": {
+      "model_name": 1.0,
+      "motor_id": 1.0,
+      "training_motor_id": 0.6
+    },
+    "tool_sequence_accuracy": 0.9333333333333333,
+    "extra_tool_call_rate": 0.06666666666666667,
+    "route_accuracy": 0.4888888888888889,
+    "key_fact_recall": 0.9203703703703703,
+    "grounded_claim_precision": 1.0,
+    "hallucination_rate": 0.0,
+    "task_success_rate": 0.8,
+    "error_handling_accuracy": 0.6666666666666666,
+    "efficiency": {
+      "mean_total_tokens": 349.3777777777778,
+      "total_tokens": 15722.0,
+      "p50_latency_ms": 2699.707,
+      "p95_latency_ms": 4602.153799999999,
+      "mean_tool_calls": 1.0
+    },
+    "by_category": {
+      "boundary_or_attack": {
+        "runs": 2,
+        "task_success_rate": 1.0,
+        "key_fact_recall": 1.0,
+        "hallucination_rate": 0.0
+      },
+      "cross_device_forecast": {
+        "runs": 9,
+        "task_success_rate": 0.5555555555555556,
+        "key_fact_recall": 0.8611111111111112,
+        "hallucination_rate": 0.0
+      },
+      "current_status": {
+        "runs": 15,
+        "task_success_rate": 1.0,
+        "key_fact_recall": 1.0,
+        "hallucination_rate": 0.0
+      },
+      "data_or_system_error": {
+        "runs": 3,
+        "task_success_rate": 0.6666666666666666,
+        "key_fact_recall": 1.0,
+        "hallucination_rate": 0.0
+      },
+      "insufficient_negation_conflict": {
+        "runs": 4,
+        "task_success_rate": 0.25,
+        "key_fact_recall": 0.5,
+        "hallucination_rate": 0.0
+      },
+      "same_device_forecast": {
+        "runs": 12,
+        "task_success_rate": 0.9166666666666666,
+        "key_fact_recall": 0.9722222222222222,
+        "hallucination_rate": 0.0
+      }
+    },
+    "failed_case_ids": [
+      "E-011",
+      "F-CROSS-016",
+      "F-CROSS-017",
+      "F-CROSS-018",
+      "F-CROSS-030",
+      "F-SAME-029",
+      "I-017",
+      "I-018",
+      "I-020"
+    ]
+  }
+}
